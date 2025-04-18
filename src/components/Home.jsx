@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Header from "./Header";
 import HomeMenu from "./HomeMenu";
 import GameSetup from "./GameSetup";
@@ -131,7 +131,6 @@ const Home = () => {
   const handleViewGameDetails = (gameId) => {
     // In a real app, we would fetch the game details by ID
     // For now, we'll just navigate to the summary view
-    console.log("Selected game ID:", gameId);
     setCurrentView("summary");
   };
 
@@ -246,38 +245,15 @@ const Home = () => {
     }
   };
 
-  // Add a new state for page transitions
-  const [pageTransition, setPageTransition] = useState(false);
-  
-  // Effect to handle page transition animations
-  useEffect(() => {
-    setPageTransition(true);
-    const timer = setTimeout(() => {
-      setPageTransition(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [currentView]);
-
   return (
-    <div className="min-h-screen grid grid-rows-[auto_1fr_auto] bg-gradient-to-br from-blue-50 to-indigo-100 text-gray-800">
+    <div className="min-h-screen bg-gray-50">
       <Header
         onNavigate={handleNavigate}
         userRole={isLoggedIn ? userRole : null}
         username={isLoggedIn ? username : ""}
         onLogout={handleLogout}
       />
-      <main className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className={`transition-all duration-300 ease-in-out ${pageTransition ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            {renderContent()}
-          </div>
-        </div>
-      </main>
-      <footer className="bg-indigo-900 text-white py-4">
-        <div className="container mx-auto text-center text-sm">
-          <p>© {new Date().getFullYear()} Digital Score Sheet - Ultimate Frisbee</p>
-        </div>
-      </footer>
+      <main className="container mx-auto py-6">{renderContent()}</main>
     </div>
   );
 };

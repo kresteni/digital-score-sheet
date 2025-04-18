@@ -29,8 +29,8 @@ export default {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "hsl(var(--primary))", // Dark navy
+          foreground: "hsl(var(--primary-foreground))", // White
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -42,7 +42,7 @@ export default {
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          foreground: "hsl(var(--muted-foreground))", // Muted gray for text
         },
         accent: {
           DEFAULT: "hsl(var(--accent))",
@@ -53,9 +53,10 @@ export default {
           foreground: "hsl(var(--popover-foreground))",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "hsl(var(--card))", // Light gray
+          foreground: "hsl(var(--card-foreground))", // Dark gray
         },
+        footer: "hsl(var(--footer))", // Dark green
       },
       borderRadius: {
         lg: "var(--radius)",
