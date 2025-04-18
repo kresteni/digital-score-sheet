@@ -8,6 +8,7 @@ import GameHistory from "./GameHistory";
 import Settings from "./Settings";
 import RoleSelection from "./RoleSelection";
 import Login from "./Login";
+import SignUp from "./SignUp";
 import TournamentSetup from "./TournamentSetup";
 import TeamManagement from "./TeamManagement";
 import BracketManagement from "./BracketManagement";
@@ -148,6 +149,21 @@ const Home = () => {
             userRole={userRole}
             onLogin={handleLogin}
             onBack={handleBackToRoleSelection}
+            onCreateAccount={() => setCurrentView("signup")}
+          />
+        );
+      case "signup":
+        return (
+          <SignUp
+            onSignUp={(username, password, name, role) => {
+              // In a real app, you would create the user account here
+              // For now, we'll just log the user in
+              setUserRole(role);
+              setIsLoggedIn(true);
+              setUsername(username);
+              setCurrentView("home");
+            }}
+            onBack={() => setCurrentView("login")}
           />
         );
       case "home":

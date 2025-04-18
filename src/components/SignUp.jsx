@@ -3,40 +3,57 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { LogIn, ArrowLeft } from "lucide-react";
+import { LogIn, ArrowLeft, UserPlus } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
-const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
+const SignUp = ({ onSignUp, onBack }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("marshall");
   const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter both username and password");
+    if (!username.trim() || !password.trim() || !name.trim()) {
+      setError("Please fill in all fields");
       return;
     }
     setError("");
-    onLogin(username, password);
+    onSignUp(username, password, name, role);
   };
 
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-background">
       <Card className="w-full shadow-lg border-2 border-primary/10">
         <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl font-bold">
-            Login as{" "}
-            {userRole === "head-marshall" ? "Head Marshall" : "Marshall"}
-          </CardTitle>
+          <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your full name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
                 type="text"
-                placeholder="Enter your username"
+                placeholder="Choose a username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -47,10 +64,23 @@ const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={role} onValueChange={(value) => setRole(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="head-marshall">Head Marshall</SelectItem>
+                  <SelectItem value="marshall">Marshall</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {error && (
@@ -68,26 +98,16 @@ const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
                 Back
               </Button>
               <Button type="submit" className="flex items-center gap-2 flex-1">
-                <LogIn size={16} />
-                Login
+                <UserPlus size={16} />
+                Sign Up
               </Button>
-            </div>
-            <div className="flex justify-center items-center gap-2 mt-4">
-              <span>Don't have an account?</span>
-              <button
-                onClick={onCreateAccount}
-                className="text-primary hover:underline font-medium"
-                type="button"
-              >
-                Create Account
-              </button>
             </div>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Enter your credentials to access the scorekeeper app</p>
+            <p>Create an account to access the scorekeeper app</p>
             <p className="mt-2">
-              {userRole === "head-marshall"
+              {role === "head-marshall"
                 ? "Head Marshall accounts have full administrative access"
                 : "Marshall accounts have limited permissions"}
             </p>
@@ -98,4 +118,4 @@ const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
   );
 };
 
-export default Login;
+export default SignUp;
