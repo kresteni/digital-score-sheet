@@ -1,6 +1,7 @@
 // src/firebase.js
-import firebase from "firebase/app";
-import "firebase/database";  // Add other Firebase services as needed
+import { initializeApp } from 'firebase/app';
+import { getDatabase } from 'firebase/database';  // for Realtime Database
+// Import other services if needed (e.g., Firestore, Auth)
 
 const firebaseConfig = {
   apiKey: "your-api-key",
@@ -12,7 +13,9 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
-const database = firebase.database();
-export default database;
+// Initialize Realtime Database
+const database = getDatabase(app);
+
+export { database };
