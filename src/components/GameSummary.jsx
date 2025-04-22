@@ -41,8 +41,6 @@ const GameSummaryJS = ({
   gameDuration = "1h 24m",
   gameDate = "June 15, 2023",
   onBackToHome = () => {},
-  onSaveGame = () => {},
-  onShareGame = () => {},
 }) => {
   // Calculate MVP (Most Valuable Player) based on goals + assists
   const calculateMVP = (players) => {
@@ -288,22 +286,6 @@ const GameSummaryJS = ({
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <Button
-          variant="outline"
-          className="flex items-center gap-2"
-          onClick={onSaveGame}
-        >
-          <Download size={16} />
-          Save Game
-        </Button>
-        <Button
-          variant="outline"
-          className="flex items-center gap-2"
-          onClick={onShareGame}
-        >
-          <Share2 size={16} />
-          Share Results
-        </Button>
         <Button onClick={onBackToHome}>Back to Home</Button>
       </div>
     </div>

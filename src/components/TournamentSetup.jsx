@@ -16,7 +16,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
   const [tournamentData, setTournamentData] = useState({
     name: "",
     startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 86400000).toISOString().split("T")[0], // Next day
+    endDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
     location: "",
     maxTeams: 12,
     format: "round-robin",
@@ -38,14 +38,11 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
     onSaveTournament(tournamentData);
   };
 
-  // Only Head Marshalls can set up tournaments
   if (userRole !== "head-marshall") {
     return (
       <Card className="w-full max-w-3xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-center text-xl">
-            Access Restricted
-          </CardTitle>
+          <CardTitle className="text-center text-xl">Access Restricted</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-center text-muted-foreground">
@@ -93,9 +90,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                         id="startDate"
                         type="date"
                         value={tournamentData.startDate}
-                        onChange={(e) =>
-                          handleChange("startDate", e.target.value)
-                        }
+                        onChange={(e) => handleChange("startDate", e.target.value)}
                         required
                       />
                     </div>
@@ -109,9 +104,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                         id="endDate"
                         type="date"
                         value={tournamentData.endDate}
-                        onChange={(e) =>
-                          handleChange("endDate", e.target.value)
-                        }
+                        onChange={(e) => handleChange("endDate", e.target.value)}
                         required
                       />
                     </div>
@@ -192,10 +185,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                       type="number"
                       value={tournamentData.pointsCap}
                       onChange={(e) =>
-                        handleChange(
-                          "pointsCap",
-                          parseInt(e.target.value) || 15,
-                        )
+                        handleChange("pointsCap", parseInt(e.target.value) || 15)
                       }
                       min={1}
                       max={30}
@@ -204,18 +194,13 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="gameDuration">
-                      Game Duration (minutes)
-                    </Label>
+                    <Label htmlFor="gameDuration">Game Duration (minutes)</Label>
                     <Input
                       id="gameDuration"
                       type="number"
                       value={tournamentData.gameDuration}
                       onChange={(e) =>
-                        handleChange(
-                          "gameDuration",
-                          parseInt(e.target.value) || 90,
-                        )
+                        handleChange("gameDuration", parseInt(e.target.value) || 90)
                       }
                       min={30}
                       max={180}
@@ -224,18 +209,13 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="timeoutDuration">
-                      Timeout Duration (seconds)
-                    </Label>
+                    <Label htmlFor="timeoutDuration">Timeout Duration (seconds)</Label>
                     <Input
                       id="timeoutDuration"
                       type="number"
                       value={tournamentData.timeoutDuration}
                       onChange={(e) =>
-                        handleChange(
-                          "timeoutDuration",
-                          parseInt(e.target.value) || 70,
-                        )
+                        handleChange("timeoutDuration", parseInt(e.target.value) || 70)
                       }
                       min={30}
                       max={120}
@@ -244,18 +224,13 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="halftimeDuration">
-                      Halftime Duration (minutes)
-                    </Label>
+                    <Label htmlFor="halftimeDuration">Halftime Duration (minutes)</Label>
                     <Input
                       id="halftimeDuration"
                       type="number"
                       value={tournamentData.halftimeDuration}
                       onChange={(e) =>
-                        handleChange(
-                          "halftimeDuration",
-                          parseInt(e.target.value) || 10,
-                        )
+                        handleChange("halftimeDuration", parseInt(e.target.value) || 10)
                       }
                       min={5}
                       max={20}

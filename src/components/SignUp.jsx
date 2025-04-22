@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "./ui/select";
 
-const SignUp = ({ onSignUp, onBack }) => {
+const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -27,6 +27,9 @@ const SignUp = ({ onSignUp, onBack }) => {
     }
     setError("");
     onSignUp(username, password, name, role);
+    if (onNavigateToInitialMenu) {
+      onNavigateToInitialMenu();
+    }
   };
 
   return (

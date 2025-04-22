@@ -5,7 +5,13 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { LogIn, ArrowLeft } from "lucide-react";
 
-const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
+const Login = ({
+  userRole,
+  onLogin,
+  onBack,
+  onCreateAccount,
+  onNavigateToInitialMenu,
+}) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,6 +24,9 @@ const Login = ({ userRole, onLogin, onBack, onCreateAccount }) => {
     }
     setError("");
     onLogin(username, password);
+    if (onNavigateToInitialMenu) {
+      onNavigateToInitialMenu();
+    }
   };
 
   return (

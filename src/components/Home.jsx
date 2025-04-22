@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import Header from "./Header";
-import HomeMenu from "./HomeMenu";
 import GameSetup from "./GameSetup";
 import GameScreen from "./GameScreen";
 import GameSummary from "./GameSummary";
@@ -14,6 +13,18 @@ import TeamManagement from "./TeamManagement";
 import BracketManagement from "./BracketManagement";
 import AwardsCalculation from "./AwardsCalculation";
 import MarshallAssignments from "./MarshallAssignments";
+import InitialMenu from "./InitialMenu";
+import TournamentMenu from "./TournamentMenu";
+import TournamentHistoryList from "./TournamentHistoryList";
+import TournamentGames from "./TournamentGames";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
 
 const Home = () => {
   const [currentView, setCurrentView] = useState("role-selection");
@@ -21,6 +32,34 @@ const Home = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
   const [gameData, setGameData] = useState(null);
+  const [currentTournament, setCurrentTournament] = useState(null);
+  const [showNoTournamentDialog, setShowNoTournamentDialog] = useState(false);
+  const [tournamentHistory, setTournamentHistory] = useState([
+    {
+      id: "1",
+      name: "Summer Championship 2023",
+      date: "2023-06-15",
+      winner: "Disc Jockeys",
+      score: "15-12",
+      location: "Central Park",
+    },
+    {
+      id: "2",
+      name: "Spring Tournament 2023",
+      date: "2023-04-10",
+      winner: "Sky Walkers",
+      score: "15-13",
+      location: "Riverside Fields",
+    },
+    {
+      id: "3",
+      name: "Winter Indoor Cup 2022",
+      date: "2022-12-05",
+      winner: "Wind Chasers",
+      score: "15-11",
+      location: "Sports Complex",
+    },
+  ]);
   const [gameHistory, setGameHistory] = useState([
     {
       id: "1",
@@ -54,16 +93,20 @@ const Home = () => {
 
     switch (route) {
       case "/":
-        setCurrentView("home");
+        setCurrentView("initial-menu");
+        break;
+      case "/current-tournament":
+        if (currentTournament) {
+          setCurrentView("tournament-menu");
+        } else {
+          setShowNoTournamentDialog(true);
+        }
         break;
       case "/history":
-        setCurrentView("history");
-        break;
-      case "/settings":
-        setCurrentView("settings");
+        setCurrentView("tournament-history");
         break;
       default:
-        setCurrentView("home");
+        setCurrentView("initial-menu");
     }
   };
 
@@ -78,7 +121,7 @@ const Home = () => {
     if (username && password) {
       setIsLoggedIn(true);
       setUsername(username);
-      setCurrentView("home");
+      setCurrentView("initial-menu");
     }
   };
 
@@ -95,12 +138,42 @@ const Home = () => {
   };
 
   const handleNewGame = () => {
-    setCurrentView("setup");
+    setCurrentView("tournament-games");
+  };
+
+  const handleStartGame = (gameData) => {
+    // Prepare game data for the game screen
+    const preparedGameData = {
+      teamA: {
+        name: gameData.teamA,
+        players: [
+          { id: "1", name: "Player 1", number: "1" },
+          { id: "2", name: "Player 2", number: "2" },
+          { id: "3", name: "Player 3", number: "3" },
+        ],
+      },
+      teamB: {
+        name: gameData.teamB,
+        players: [
+          { id: "4", name: "Player 4", number: "1" },
+          { id: "5", name: "Player 5", number: "2" },
+          { id: "6", name: "Player 6", number: "3" },
+        ],
+      },
+      parameters: {
+        gameDuration: 90,
+        timeoutDuration: 70,
+        halftimeDuration: 10,
+      },
+    };
+
+    setGameData(preparedGameData);
+    setCurrentView("game");
   };
 
   const handleGameStart = (data) => {
     if (data === null) {
-      setCurrentView("home");
+      setCurrentView("initial-menu");
       return;
     }
     setGameData(data);
@@ -136,7 +209,64 @@ const Home = () => {
   };
 
   const handleBackToHome = () => {
-    setCurrentView("home");
+    setCurrentView("initial-menu");
+  };
+
+  const handleNewTournament = () => {
+    setCurrentView("tournament-setup");
+  };
+
+  const handleCurrentTournament = () => {
+    if (currentTournament) {
+      setCurrentView("tournament-menu");
+    } else {
+      setShowNoTournamentDialog(true);
+    }
+  };
+
+  const handleTournamentHistory = () => {
+    setCurrentView("tournament-history");
+  };
+
+  const handleViewTournamentDetails = (tournamentId) => {
+    // In a real app, we would set the current tournament based on the ID
+    // For now, we'll just navigate to the game history view
+    setCurrentView("history");
+  };
+
+  const handleSaveTournament = (tournamentData) => {
+    if (tournamentData === null) {
+      setCurrentView("initial-menu");
+      return;
+    }
+
+    // Save the tournament data and move to team management
+    setCurrentTournament(tournamentData);
+    setCurrentView("team-management");
+  };
+
+  const handleSaveTeams = () => {
+    // After team management, go to current tournament view
+    setCurrentView("tournament-menu");
+  };
+
+  const handleFinishTournament = () => {
+    // Add current tournament to history
+    if (currentTournament) {
+      const finishedTournament = {
+        ...currentTournament,
+        date: new Date().toISOString().split("T")[0],
+        // In a real app, you would determine the winner and score
+        winner: "TBD",
+        score: "--",
+      };
+
+      setTournamentHistory([finishedTournament, ...tournamentHistory]);
+      setCurrentTournament(null);
+    }
+
+    // Navigate back to initial menu
+    setCurrentView("initial-menu");
   };
 
   const renderContent = () => {
@@ -150,6 +280,7 @@ const Home = () => {
             onLogin={handleLogin}
             onBack={handleBackToRoleSelection}
             onCreateAccount={() => setCurrentView("signup")}
+            onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
           />
         );
       case "signup":
@@ -161,25 +292,56 @@ const Home = () => {
               setUserRole(role);
               setIsLoggedIn(true);
               setUsername(username);
-              setCurrentView("home");
             }}
             onBack={() => setCurrentView("login")}
+            onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
           />
         );
-      case "home":
+      case "initial-menu":
         return (
-          <HomeMenu
-            onNewGame={handleNewGame}
-            onViewHistory={() => setCurrentView("history")}
-            onSettings={() => setCurrentView("settings")}
-            onTournamentSetup={() => setCurrentView("tournament-setup")}
-            onTeamManagement={() => setCurrentView("team-management")}
-            onBracketManagement={() => setCurrentView("bracket-management")}
-            onAwardsCalculation={() => setCurrentView("awards-calculation")}
-            onMarshallAssignments={() => setCurrentView("marshall-assignments")}
+          <InitialMenu
+            onNewTournament={handleNewTournament}
+            onCurrentTournament={handleCurrentTournament}
+            onTournamentHistory={handleTournamentHistory}
             userRole={userRole}
           />
         );
+      case "tournament-menu":
+        return (
+          <TournamentMenu
+            onPlayGame={handleNewGame}
+            onViewGameHistory={() => setCurrentView("history")}
+            onBracketManagement={() => setCurrentView("bracket-management")}
+            onMarshallAssignments={() => setCurrentView("marshall-assignments")}
+            onAwardsCalculation={() => setCurrentView("awards-calculation")}
+            onTournamentSetup={() => setCurrentView("tournament-setup")}
+            onTeamManagement={() => setCurrentView("team-management")}
+            onFinishTournament={handleFinishTournament}
+            userRole={userRole}
+            tournamentName={currentTournament?.name || "Current Tournament"}
+          />
+        );
+      case "tournament-games":
+        return (
+          <TournamentGames
+            tournamentId={currentTournament?.id}
+            onBack={() => setCurrentView("tournament-menu")}
+            onStartGame={handleStartGame}
+            userRole={userRole}
+          />
+        );
+      case "tournament-history":
+        return (
+          <TournamentHistoryList
+            tournaments={tournamentHistory}
+            onViewTournament={handleViewTournamentDetails}
+            onBack={() => setCurrentView("initial-menu")}
+          />
+        );
+      case "home":
+        // Redirect to initial-menu instead of showing HomeMenu
+        setCurrentView("initial-menu");
+        return null;
       case "setup":
         return <GameSetup onGameStart={handleGameStart} userRole={userRole} />;
       case "game":
@@ -235,19 +397,19 @@ const Home = () => {
       case "tournament-setup":
         return (
           <TournamentSetup
-            onSaveTournament={(data) => {
-              if (data === null) {
-                setCurrentView("home");
-                return;
-              }
-              // Save tournament data and return to home
-              setCurrentView("home");
-            }}
+            onSaveTournament={handleSaveTournament}
             userRole={userRole}
           />
         );
       case "team-management":
-        return <TeamManagement userRole={userRole} />;
+        return (
+          <TeamManagement
+            userRole={userRole}
+            tournamentId={currentTournament?.id}
+            onBack={() => setCurrentView("tournament-setup")}
+            onComplete={() => setCurrentView("tournament-menu")}
+          />
+        );
       case "bracket-management":
         return <BracketManagement userRole={userRole} />;
       case "awards-calculation":
@@ -270,6 +432,42 @@ const Home = () => {
         onLogout={handleLogout}
       />
       <main className="container mx-auto py-6">{renderContent()}</main>
+
+      {/* No Current Tournament Dialog */}
+      <Dialog
+        open={showNoTournamentDialog}
+        onOpenChange={setShowNoTournamentDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>No Current Tournament</DialogTitle>
+            <DialogDescription>
+              There is no active tournament. Please create a new tournament
+              first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              onClick={() => {
+                setShowNoTournamentDialog(false);
+                setCurrentView("initial-menu");
+              }}
+            >
+              Back to Menu
+            </Button>
+            {userRole === "head-marshall" && (
+              <Button
+                onClick={() => {
+                  setShowNoTournamentDialog(false);
+                  handleNewTournament();
+                }}
+              >
+                Create Tournament
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

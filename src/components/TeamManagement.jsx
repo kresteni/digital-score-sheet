@@ -21,8 +21,7 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 
-const TeamManagement = ({ userRole, tournamentId }) => {
-    console.log(tournamentId);
+const TeamManagement = ({ userRole, tournamentId, onComplete = () => {}, onBack = () => window.history.back() }) => {
   const [teams, setTeams] = useState([
     {
       id: "1",
@@ -83,10 +82,7 @@ const TeamManagement = ({ userRole, tournamentId }) => {
   const handleSaveTeam = () => {
     if (!editingTeam) return;
 
-    setTeams(
-      teams.map((team) => (team.id === editingTeam.id ? editingTeam : team))
-    );
-
+    setTeams(teams.map((team) => (team.id === editingTeam.id ? editingTeam : team)));
     setEditingTeam(null);
   };
 
@@ -153,7 +149,7 @@ const TeamManagement = ({ userRole, tournamentId }) => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl font-bold">Team Management</CardTitle>
-            <Button variant="outline" onClick={() => window.history.back()}>
+            <Button variant="outline" onClick={onBack}>
               Back
             </Button>
           </div>
@@ -233,11 +229,7 @@ const TeamManagement = ({ userRole, tournamentId }) => {
                           ) : (
                             <div className="flex items-center gap-2">
                               <h4 className="text-xl font-semibold">{team.name}</h4>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditTeam(team)}
-                              >
+                              <Button variant="ghost" size="sm" onClick={() => handleEditTeam(team)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <Button
@@ -341,10 +333,7 @@ const TeamManagement = ({ userRole, tournamentId }) => {
                           ))}
                           {team.players.length === 0 && (
                             <TableRow>
-                              <TableCell
-                                colSpan={4}
-                                className="text-center py-4 text-muted-foreground"
-                              >
+                              <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
                                 No players added yet
                               </TableCell>
                             </TableRow>
@@ -356,6 +345,13 @@ const TeamManagement = ({ userRole, tournamentId }) => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Done Button */}
+          <div className="flex justify-end mt-8">
+            <Button onClick={onComplete} className="px-8">
+              Done
+            </Button>
           </div>
         </CardContent>
       </Card>

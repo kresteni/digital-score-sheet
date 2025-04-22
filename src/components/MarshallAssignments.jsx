@@ -33,7 +33,7 @@ import AssignmentSchedule from "./AssignmentSchedule";
 
 const MarshallAssignments = ({
   userRole,
-  onBack = () => window.history.back(),
+  onBack = () => {"TournamentMenu"},
 }) => {
   const [marshalls, setMarshalls] = useState([
     { id: "1", name: "Charlene Layo", assignments: 2 },
