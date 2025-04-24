@@ -4,6 +4,9 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { LogIn, ArrowLeft } from "lucide-react";
+import { auth, db } from "../firebase"; // ✅ adjust path if needed
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 const Login = ({
   userRole,
@@ -12,20 +15,47 @@ const Login = ({
   onCreateAccount,
   onNavigateToInitialMenu,
 }) => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter both username and password");
+
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter both email and password");
       return;
     }
-    setError("");
-    onLogin(username, password);
-    if (onNavigateToInitialMenu) {
-      onNavigateToInitialMenu();
+
+    try {
+      // 🔐 Firebase Auth login
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 🔎 Retrieve role and username from Firestore
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+
+        // Optional: role validation
+        if (userData.role !== userRole) {
+          setError("Role mismatch. Please log in using the correct role.");
+          return;
+        }
+
+        // ✅ All good, login success
+        onLogin(user.email, password, userData.username, userData.role);
+        if (onNavigateToInitialMenu) {
+          onNavigateToInitialMenu();
+        }
+      } else {
+        setError("No user data found. Please contact support.");
+      }
+    } catch (err) {
+      console.error("Login error:", err.message);
+      setError(`Error: ${err.message}`);
     }
   };
 
@@ -34,20 +64,19 @@ const Login = ({
       <Card className="w-full shadow-lg border-2 border-primary/10">
         <CardHeader className="text-center pb-2">
           <CardTitle className="text-2xl font-bold">
-            Login as{" "}
-            {userRole === "head-marshall" ? "Head Marshall" : "Marshall"}
+            Login as {userRole === "head-marshall" ? "Head Marshall" : "Marshall"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 

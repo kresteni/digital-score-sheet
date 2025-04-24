@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { LogIn, ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,24 +11,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { auth, db } from "../firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // 🛠 use `doc`, not `addDoc`
 
 const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
+  const [email, setEmail] = useState(""); // 🆕 New state for email
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("marshall");
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim() || !name.trim()) {
+    if (!email.trim() || !username.trim() || !password.trim() || !name.trim()) {
       setError("Please fill in all fields");
       return;
     }
-    setError("");
-    onSignUp(username, password, name, role);
-    if (onNavigateToInitialMenu) {
-      onNavigateToInitialMenu();
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, "users", user.uid), {
+        userId: user.uid,
+        email, // 🆕 Store the email
+        username,
+        name,
+        role,
+        createdAt: serverTimestamp(),
+      });
+
+      onSignUp(email, password, name, role);
+      if (onNavigateToInitialMenu) onNavigateToInitialMenu();
+    } catch (err) {
+      console.error("Error signing up:", err.code, err.message);
+      setError(`Error: ${err.message}`);
     }
   };
 
@@ -40,6 +59,19 @@ const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* 🆕 Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input
