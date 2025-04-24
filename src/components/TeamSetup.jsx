@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Plus, X, User } from "lucide-react";
 import {
   Card,
@@ -9,24 +9,55 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { auth, db } from "../firebase";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+} from "firebase/firestore";
 
-const TeamSetup = ({
-  teamName = "Team Name",
-  players = [
-    { id: "1", name: "Player 1", number: "1" },
-    { id: "2", name: "Player 2", number: "2" },
-  ],
-  onTeamNameChange = () => {},
-  onPlayersChange = () => {},
-}) => {
-  const [teamNameInput, setTeamNameInput] = useState(teamName);
-  const [playersList, setPlayersList] = useState(players);
+const TeamSetup = ({ tournamentId }) => {
+  const [teamNameInput, setTeamNameInput] = useState("");
+  const [playersList, setPlayersList] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [tournamentLocked, setTournamentLocked] = useState(false);
+
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    if (!tournamentId || !user) return;
+
+    const fetchData = async () => {
+      const tournamentRef = doc(db, "tournaments", tournamentId); // Reference to tournament document
+      const tournamentSnap = await getDoc(tournamentRef);
+
+      if (tournamentSnap.exists()) {
+        const teamRef = collection(tournamentRef, "teams"); // Access teams subcollection under tournament
+        const teamQuery = query(teamRef, where("createdBy", "==", user.uid));
+        const teamSnap = await getDocs(teamQuery);
+
+        if (!teamSnap.empty) {
+          // Assuming there is only one team for the current user
+          const teamData = teamSnap.docs[0].data();
+          setTeamNameInput(teamData.teamName || "");
+          setPlayersList(teamData.players || []);
+          setTournamentLocked(teamData.locked || false);
+        }
+      }
+    };
+
+    fetchData();
+  }, [tournamentId, user]);
 
   const handleTeamNameChange = (e) => {
     setTeamNameInput(e.target.value);
-    onTeamNameChange(e.target.value);
   };
 
   const handleAddPlayer = () => {
@@ -36,23 +67,40 @@ const TeamSetup = ({
         name: newPlayerName.trim(),
         number: newPlayerNumber.trim() || undefined,
       };
-
       const updatedPlayers = [...playersList, newPlayer];
       setPlayersList(updatedPlayers);
-      onPlayersChange(updatedPlayers);
-
-      // Reset input fields
       setNewPlayerName("");
       setNewPlayerNumber("");
     }
   };
 
   const handleRemovePlayer = (playerId) => {
-    const updatedPlayers = playersList.filter(
-      (player) => player.id !== playerId,
-    );
+    const updatedPlayers = playersList.filter((p) => p.id !== playerId);
     setPlayersList(updatedPlayers);
-    onPlayersChange(updatedPlayers);
+  };
+
+  const handleSaveTeam = async () => {
+    if (!user || !tournamentId) return;
+    setIsSaving(true);
+
+    const tournamentRef = doc(db, "tournaments", tournamentId); // Reference to the tournament document
+    const teamRef = doc(tournamentRef, "teams", user.uid); // Reference to the user's team document within the tournament
+
+    try {
+      // Save or update the team information for the current user
+      await setDoc(teamRef, {
+        teamName: teamNameInput,
+        players: playersList,
+        createdBy: user.uid,
+        locked: true, // Lock the tournament after saving
+      });
+
+      setTournamentLocked(true);
+    } catch (error) {
+      console.error("Error saving team:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -72,6 +120,7 @@ const TeamSetup = ({
             onChange={handleTeamNameChange}
             placeholder="Enter team name"
             className="w-full"
+            disabled={tournamentLocked}
           />
         </div>
 
@@ -98,49 +147,59 @@ const TeamSetup = ({
                     </span>
                   )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemovePlayer(player.id)}
-                  className="h-6 w-6 text-gray-500 hover:text-red-500"
-                >
-                  <X size={14} />
-                </Button>
+                {!tournamentLocked && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemovePlayer(player.id)}
+                    className="h-6 w-6 text-gray-500 hover:text-red-500"
+                  >
+                    <X size={14} />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
 
-          <div className="mt-3 space-y-2">
-            <div className="flex gap-2">
-              <Input
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                placeholder="Player name"
-                className="flex-1"
-              />
-              <Input
-                value={newPlayerNumber}
-                onChange={(e) => setNewPlayerNumber(e.target.value)}
-                placeholder="#"
-                className="w-16"
-              />
+          {!tournamentLocked && (
+            <div className="mt-3 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={newPlayerName}
+                  onChange={(e) => setNewPlayerName(e.target.value)}
+                  placeholder="Player name"
+                  className="flex-1"
+                />
+                <Input
+                  value={newPlayerNumber}
+                  onChange={(e) => setNewPlayerNumber(e.target.value)}
+                  placeholder="#"
+                  className="w-16"
+                />
+              </div>
+              <Button
+                onClick={handleAddPlayer}
+                className="w-full flex items-center justify-center gap-1"
+                disabled={!newPlayerName.trim()}
+              >
+                <Plus size={16} />
+                Add Player
+              </Button>
             </div>
-            <Button
-              onClick={handleAddPlayer}
-              className="w-full flex items-center justify-center gap-1"
-              disabled={!newPlayerName.trim()}
-            >
-              <Plus size={16} />
-              Add Player
-            </Button>
-          </div>
+          )}
         </div>
       </CardContent>
 
       <CardFooter className="flex justify-between border-t pt-4">
-        <div className="text-sm text-gray-500">
-          Add players to your team roster
-        </div>
+        {!tournamentLocked ? (
+          <Button onClick={handleSaveTeam} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Team"}
+          </Button>
+        ) : (
+          <div className="text-sm text-green-600 font-semibold">
+            Team saved and tournament is locked.
+          </div>
+        )}
       </CardFooter>
     </Card>
   );

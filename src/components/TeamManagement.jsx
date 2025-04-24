@@ -1,17 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
-import { Plus, Trash2, Edit, Save, X, UserPlus } from "lucide-react";
+import { Plus, Trash2, Edit, Save, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,39 +12,31 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "./ui/dialog";
+import { db, auth } from "../firebase";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  doc,
+  deleteDoc,
+  updateDoc,
+} from "firebase/firestore";
 
-const TeamManagement = ({ userRole, tournamentId, onComplete = () => {}, onBack = () => window.history.back() }) => {
-  const [teams, setTeams] = useState([
-    {
-      id: "1",
-      name: "Disc Jockeys",
-      captain: "Alex Smith",
-      contactEmail: "alex@example.com",
-      players: [
-        { id: "1", name: "Alex Smith", number: "1", position: "Handler" },
-        { id: "2", name: "Jamie Johnson", number: "2", position: "Cutter" },
-        { id: "3", name: "Taylor Brown", number: "3", position: "Handler" },
-      ],
-    },
-    {
-      id: "2",
-      name: "Sky Walkers",
-      captain: "Jordan Lee",
-      contactEmail: "jordan@example.com",
-      players: [
-        { id: "4", name: "Jordan Lee", number: "1", position: "Handler" },
-        { id: "5", name: "Casey Wilson", number: "2", position: "Cutter" },
-        { id: "6", name: "Riley Garcia", number: "3", position: "Handler" },
-      ],
-    },
-  ]);
-
-  const [editingTeam, setEditingTeam] = useState(null);
+const TeamManagement = ({
+  userRole,
+  tournamentId,
+  onComplete = () => {},
+  onBack = () => window.history.back(),
+}) => {
+  const [teams, setTeams] = useState([]);
   const [newTeam, setNewTeam] = useState({
     name: "",
     captain: "",
     contactEmail: "",
   });
+  const [editingTeam, setEditingTeam] = useState(null);
   const [newPlayer, setNewPlayer] = useState({
     name: "",
     number: "",
@@ -60,72 +44,122 @@ const TeamManagement = ({ userRole, tournamentId, onComplete = () => {}, onBack 
   });
   const [selectedTeamId, setSelectedTeamId] = useState(null);
 
-  const canManageTeams = userRole === "head-marshall";
-
-  const handleAddTeam = () => {
-    if (!newTeam.name || !newTeam.captain) return;
-
-    const team = {
-      id: Date.now().toString(),
-      ...newTeam,
-      players: [],
+  useEffect(() => {
+    const fetchTeams = async () => {
+      const teamsCollection = collection(db, "teams");
+      const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
+      const querySnapshot = await getDocs(q);
+      setTeams(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     };
 
-    setTeams([...teams, team]);
-    setNewTeam({ name: "", captain: "", contactEmail: "" });
+    fetchTeams();
+  }, [tournamentId]);
+
+  const canManageTeams = userRole === "head-marshall";
+
+  const handleAddTeam = async () => {
+    if (!newTeam.name || !newTeam.captain) return;
+
+    try {
+      const docRef = await addDoc(collection(db, "teams"), {
+        name: newTeam.name,
+        captain: newTeam.captain,
+        contactEmail: newTeam.contactEmail,
+        tournamentId,
+        createdBy: auth.currentUser.uid,
+      });
+
+      const teamsCollection = collection(db, "teams");
+      const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
+      const querySnapshot = await getDocs(q);
+      setTeams(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+
+      setNewTeam({ name: "", captain: "", contactEmail: "" });
+    } catch (error) {
+      console.error("Error adding team: ", error);
+    }
   };
 
   const handleEditTeam = (team) => {
     setEditingTeam({ ...team });
   };
 
-  const handleSaveTeam = () => {
+  const handleSaveTeam = async () => {
     if (!editingTeam) return;
 
-    setTeams(teams.map((team) => (team.id === editingTeam.id ? editingTeam : team)));
-    setEditingTeam(null);
+    const teamRef = doc(db, "teams", editingTeam.id);
+
+    try {
+      await updateDoc(teamRef, {
+        name: editingTeam.name,
+        captain: editingTeam.captain,
+        contactEmail: editingTeam.contactEmail,
+      });
+      setTeams(teams.map((team) => (team.id === editingTeam.id ? editingTeam : team)));
+      setEditingTeam(null);
+    } catch (error) {
+      console.error("Error saving team: ", error);
+    }
   };
 
-  const handleDeleteTeam = (teamId) => {
-    setTeams(teams.filter((team) => team.id !== teamId));
+  const handleDeleteTeam = async (teamId) => {
+    try {
+      await deleteDoc(doc(db, "teams", teamId));
+      setTeams(teams.filter((team) => team.id !== teamId));
+    } catch (error) {
+      console.error("Error deleting team: ", error);
+    }
   };
 
-  const handleAddPlayer = () => {
+  const handleAddPlayer = async () => {
     if (!selectedTeamId || !newPlayer.name || !newPlayer.number) return;
 
     const player = {
-      id: Date.now().toString(),
-      ...newPlayer,
-      stats: { goals: 0, assists: 0, blocks: 0 },
+      name: newPlayer.name,
+      number: newPlayer.number,
+      position: newPlayer.position,
+      teamId: selectedTeamId,
+      tournamentId,
     };
 
-    setTeams(
-      teams.map((team) => {
-        if (team.id === selectedTeamId) {
-          return {
-            ...team,
-            players: [...team.players, player],
-          };
-        }
-        return team;
-      })
-    );
+    try {
+      const docRef = await addDoc(collection(db, "players"), player); // 🔥 Corrected here
 
-    setNewPlayer({ name: "", number: "", position: "" });
+      setTeams(
+        teams.map((team) =>
+          team.id === selectedTeamId
+            ? {
+                ...team,
+                players: [...(team.players || []), { id: docRef.id, ...player }],
+              }
+            : team
+        )
+      );
+
+      setNewPlayer({ name: "", number: "", position: "" });
+    } catch (error) {
+      console.error("Error adding player: ", error);
+    }
   };
 
-  const handleDeletePlayer = (teamId, playerId) => {
-    setTeams(
-      teams.map((team) => {
-        if (team.id === teamId) {
-          return {
-            ...team,
-            players: team.players.filter((player) => player.id !== playerId),
-          };
-        }
-        return team;
-      })
-    );
+  const handleDeletePlayer = async (teamId, playerId) => {
+    try {
+      const playerDocRef = doc(db, "teams", teamId, "players", playerId);
+      await deleteDoc(playerDocRef);
+
+      setTeams(
+        teams.map((team) =>
+          team.id === teamId
+            ? {
+                ...team,
+                players: team.players?.filter((player) => player.id !== playerId),
+              }
+            : team
+        )
+      );
+    } catch (error) {
+      console.error("Error deleting player: ", error);
+    }
   };
 
   if (!canManageTeams) {
@@ -222,7 +256,11 @@ const TeamManagement = ({ userRole, tournamentId, onComplete = () => {}, onBack 
                               <Button variant="ghost" size="sm" onClick={handleSaveTeam}>
                                 <Save className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setEditingTeam(null)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingTeam(null)}
+                              >
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
@@ -241,115 +279,74 @@ const TeamManagement = ({ userRole, tournamentId, onComplete = () => {}, onBack 
                               </Button>
                             </div>
                           )}
-                          <p className="text-sm text-gray-500">
-                            Captain: {team.captain} | Email: {team.contactEmail}
-                          </p>
+                          <p className="text-sm text-gray-500">{team.captain}</p>
+                          <div className="mt-4">
+                            <h5 className="text-lg font-semibold">Players</h5>
+                            <ul className="space-y-2">
+                              {team.players?.map((player) => (
+                                <li key={player.id} className="flex justify-between">
+                                  <span>{player.name} (#{player.number})</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeletePlayer(team.id, player.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedTeamId(team.id)}
-                            >
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Add Player
+                            <Button variant="outline" onClick={() => setSelectedTeamId(team.id)}>
+                              Add Players
                             </Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Add Player to {team.name}</DialogTitle>
+                              <DialogTitle>Add Players for {team.name}</DialogTitle>
                             </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                              <div>
-                                <Label htmlFor="playerName">Player Name</Label>
-                                <Input
-                                  id="playerName"
-                                  value={newPlayer.name}
-                                  onChange={(e) =>
-                                    setNewPlayer({ ...newPlayer, name: e.target.value })
-                                  }
-                                  placeholder="Player Name"
-                                />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor="playerNumber">Jersey Number</Label>
-                                  <Input
-                                    id="playerNumber"
-                                    value={newPlayer.number}
-                                    onChange={(e) =>
-                                      setNewPlayer({ ...newPlayer, number: e.target.value })
-                                    }
-                                    placeholder="#"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="playerPosition">Position</Label>
-                                  <Input
-                                    id="playerPosition"
-                                    value={newPlayer.position}
-                                    onChange={(e) =>
-                                      setNewPlayer({ ...newPlayer, position: e.target.value })
-                                    }
-                                    placeholder="Handler/Cutter"
-                                  />
-                                </div>
-                              </div>
+                            <div>
+                              <Label>Player Name</Label>
+                              <Input
+                                value={newPlayer.name}
+                                onChange={(e) =>
+                                  setNewPlayer({ ...newPlayer, name: e.target.value })
+                                }
+                              />
+                              <Label>Player Number</Label>
+                              <Input
+                                value={newPlayer.number}
+                                onChange={(e) =>
+                                  setNewPlayer({ ...newPlayer, number: e.target.value })
+                                }
+                              />
+                              <Label>Position</Label>
+                              <Input
+                                value={newPlayer.position}
+                                onChange={(e) =>
+                                  setNewPlayer({ ...newPlayer, position: e.target.value })
+                                }
+                              />
+                              <Button className="mt-2" onClick={handleAddPlayer}>
+                                Add Player
+                              </Button>
                             </div>
-                            <DialogFooter>
-                              <Button onClick={handleAddPlayer}>Add Player</Button>
-                            </DialogFooter>
                           </DialogContent>
                         </Dialog>
                       </div>
                     </div>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Number</TableHead>
-                            <TableHead>Position</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {team.players.map((player) => (
-                            <TableRow key={player.id}>
-                              <TableCell>{player.name}</TableCell>
-                              <TableCell>#{player.number}</TableCell>
-                              <TableCell>{player.position}</TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeletePlayer(team.id, player.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {team.players.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                                No players added yet
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
                   </Card>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Done Button */}
-          <div className="flex justify-end mt-8">
-            <Button onClick={onComplete} className="px-8">
+          {/* DONE BUTTON */}
+          <div className="mt-8 text-center">
+            <Button size="lg" onClick={onComplete}>
               Done
             </Button>
           </div>

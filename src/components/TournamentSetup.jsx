@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Calendar, Trophy, Users, Clock } from "lucide-react";
+import { db, auth } from "../firebase"; // ✅ adjust path to your firebase.js
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 const TournamentSetup = ({ onSaveTournament, userRole }) => {
   const [tournamentData, setTournamentData] = useState({
@@ -26,6 +29,15 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
     halftimeDuration: 10,
   });
 
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleChange = (field, value) => {
     setTournamentData((prev) => ({
       ...prev,
@@ -33,9 +45,28 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSaveTournament(tournamentData);
+
+    if (!user) {
+      alert("You must be logged in to create a tournament.");
+      return;
+    }
+
+    const newTournament = {
+      ...tournamentData,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, "tournaments"), newTournament);
+      alert("Tournament created successfully!");
+      onSaveTournament({ id: docRef.id, ...newTournament });
+    } catch (error) {
+      console.error("Error creating tournament:", error);
+      alert("Failed to create tournament.");
+    }
   };
 
   if (userRole !== "head-marshall") {
@@ -63,7 +94,6 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Tournament Basic Info */}
               <div className="space-y-4 md:col-span-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Trophy className="h-5 w-5" />
@@ -123,7 +153,6 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                 </div>
               </div>
 
-              {/* Tournament Format */}
               <div className="space-y-4 md:col-span-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -170,7 +199,6 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                 </div>
               </div>
 
-              {/* Game Rules */}
               <div className="space-y-4 md:col-span-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Clock className="h-5 w-5" />
