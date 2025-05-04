@@ -22,6 +22,7 @@ import {
   doc,
   deleteDoc,
   updateDoc,
+  onSnapshot,
 } from "firebase/firestore";
 
 const TeamManagement = ({
@@ -43,16 +44,42 @@ const TeamManagement = ({
     position: "",
   });
   const [selectedTeamId, setSelectedTeamId] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchTeams = async () => {
-      const teamsCollection = collection(db, "teams");
-      const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
-      const querySnapshot = await getDocs(q);
-      setTeams(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    };
+    if (!tournamentId) return;
 
-    fetchTeams();
+    // Set up a real-time listener for teams
+    const teamsCollection = collection(db, "teams");
+    const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
+    
+    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+      const teamsData = [];
+      
+      for (const teamDoc of querySnapshot.docs) {
+        const teamData = { id: teamDoc.id, ...teamDoc.data() };
+        
+        // Fetch players for each team
+        const playersCollection = collection(db, "players");
+        const playersQuery = query(playersCollection, where("teamId", "==", teamDoc.id));
+        const playersSnapshot = await getDocs(playersQuery);
+        
+        teamData.players = playersSnapshot.docs.map(playerDoc => ({
+          id: playerDoc.id,
+          ...playerDoc.data()
+        }));
+        
+        teamsData.push(teamData);
+      }
+      
+      setTeams(teamsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching teams:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [tournamentId]);
 
   const canManageTeams = userRole === "head-marshall";
@@ -61,18 +88,14 @@ const TeamManagement = ({
     if (!newTeam.name || !newTeam.captain) return;
 
     try {
-      const docRef = await addDoc(collection(db, "teams"), {
+      await addDoc(collection(db, "teams"), {
         name: newTeam.name,
         captain: newTeam.captain,
         contactEmail: newTeam.contactEmail,
         tournamentId,
         createdBy: auth.currentUser.uid,
+        createdAt: new Date(),
       });
-
-      const teamsCollection = collection(db, "teams");
-      const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
-      const querySnapshot = await getDocs(q);
-      setTeams(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
 
       setNewTeam({ name: "", captain: "", contactEmail: "" });
     } catch (error) {
@@ -94,8 +117,8 @@ const TeamManagement = ({
         name: editingTeam.name,
         captain: editingTeam.captain,
         contactEmail: editingTeam.contactEmail,
+        updatedAt: new Date(),
       });
-      setTeams(teams.map((team) => (team.id === editingTeam.id ? editingTeam : team)));
       setEditingTeam(null);
     } catch (error) {
       console.error("Error saving team: ", error);
@@ -104,59 +127,47 @@ const TeamManagement = ({
 
   const handleDeleteTeam = async (teamId) => {
     try {
+      // First delete all players associated with this team
+      const playersCollection = collection(db, "players");
+      const playersQuery = query(playersCollection, where("teamId", "==", teamId));
+      const playersSnapshot = await getDocs(playersQuery);
+      
+      const deletePromises = playersSnapshot.docs.map(playerDoc => 
+        deleteDoc(doc(db, "players", playerDoc.id))
+      );
+      
+      await Promise.all(deletePromises);
+      
+      // Then delete the team
       await deleteDoc(doc(db, "teams", teamId));
-      setTeams(teams.filter((team) => team.id !== teamId));
     } catch (error) {
       console.error("Error deleting team: ", error);
     }
   };
 
   const handleAddPlayer = async () => {
-    if (!selectedTeamId || !newPlayer.name || !newPlayer.number) return;
+    if (!selectedTeamId || !newPlayer.name) return;
 
     const player = {
       name: newPlayer.name,
-      number: newPlayer.number,
-      position: newPlayer.position,
+      number: newPlayer.number || "",
+      position: newPlayer.position || "",
       teamId: selectedTeamId,
       tournamentId,
+      createdAt: new Date(),
     };
 
     try {
-      const docRef = await addDoc(collection(db, "players"), player); // 🔥 Corrected here
-
-      setTeams(
-        teams.map((team) =>
-          team.id === selectedTeamId
-            ? {
-                ...team,
-                players: [...(team.players || []), { id: docRef.id, ...player }],
-              }
-            : team
-        )
-      );
-
+      await addDoc(collection(db, "players"), player);
       setNewPlayer({ name: "", number: "", position: "" });
     } catch (error) {
       console.error("Error adding player: ", error);
     }
   };
 
-  const handleDeletePlayer = async (teamId, playerId) => {
+  const handleDeletePlayer = async (playerId) => {
     try {
-      const playerDocRef = doc(db, "teams", teamId, "players", playerId);
-      await deleteDoc(playerDocRef);
-
-      setTeams(
-        teams.map((team) =>
-          team.id === teamId
-            ? {
-                ...team,
-                players: team.players?.filter((player) => player.id !== playerId),
-              }
-            : team
-        )
-      );
+      await deleteDoc(doc(db, "players", playerId));
     } catch (error) {
       console.error("Error deleting player: ", error);
     }
@@ -171,6 +182,21 @@ const TeamManagement = ({
         <CardContent>
           <p className="text-center text-muted-foreground">
             Only Head Marshalls can manage teams. Please contact a Head Marshall for assistance.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-center text-xl">Loading teams...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            Please wait while we fetch the team data.
           </p>
         </CardContent>
       </Card>
@@ -285,11 +311,15 @@ const TeamManagement = ({
                             <ul className="space-y-2">
                               {team.players?.map((player) => (
                                 <li key={player.id} className="flex justify-between">
-                                  <span>{player.name} (#{player.number})</span>
+                                  <span>
+                                    {player.name}
+                                    {player.number && ` (#${player.number})`}
+                                    {player.position && ` - ${player.position}`}
+                                  </span>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDeletePlayer(team.id, player.id)}
+                                    onClick={() => handleDeletePlayer(player.id)}
                                   >
                                     <Trash2 className="h-4 w-4 text-red-500" />
                                   </Button>
@@ -308,29 +338,39 @@ const TeamManagement = ({
                             <DialogHeader>
                               <DialogTitle>Add Players for {team.name}</DialogTitle>
                             </DialogHeader>
-                            <div>
-                              <Label>Player Name</Label>
-                              <Input
-                                value={newPlayer.name}
-                                onChange={(e) =>
-                                  setNewPlayer({ ...newPlayer, name: e.target.value })
-                                }
-                              />
-                              <Label>Player Number</Label>
-                              <Input
-                                value={newPlayer.number}
-                                onChange={(e) =>
-                                  setNewPlayer({ ...newPlayer, number: e.target.value })
-                                }
-                              />
-                              <Label>Position</Label>
-                              <Input
-                                value={newPlayer.position}
-                                onChange={(e) =>
-                                  setNewPlayer({ ...newPlayer, position: e.target.value })
-                                }
-                              />
-                              <Button className="mt-2" onClick={handleAddPlayer}>
+                            <div className="space-y-4 mt-4">
+                              <div>
+                                <Label>Player Name</Label>
+                                <Input
+                                  value={newPlayer.name}
+                                  onChange={(e) =>
+                                    setNewPlayer({ ...newPlayer, name: e.target.value })
+                                  }
+                                  placeholder="Player name"
+                                />
+                              </div>
+                              <div>
+                                <Label>Player Number</Label>
+                                <Input
+                                  value={newPlayer.number}
+                                  onChange={(e) =>
+                                    setNewPlayer({ ...newPlayer, number: e.target.value })
+                                  }
+                                  placeholder="Jersey number"
+                                />
+                              </div>
+                              <div>
+                                <Label>Position</Label>
+                                <Input
+                                  value={newPlayer.position}
+                                  onChange={(e) =>
+                                    setNewPlayer({ ...newPlayer, position: e.target.value })
+                                  }
+                                  placeholder="Player position"
+                                />
+                              </div>
+                              <Button className="w-full" onClick={handleAddPlayer} disabled={!newPlayer.name}>
+                                <Plus className="mr-2 h-4 w-4" />
                                 Add Player
                               </Button>
                             </div>

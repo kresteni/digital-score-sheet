@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "./Header";
 import GameSetup from "./GameSetup";
 import GameScreen from "./GameScreen";
 import GameSummary from "./GameSummary";
 import GameHistory from "./GameHistory";
-import Settings from "./Settings";
 import RoleSelection from "./RoleSelection";
 import Login from "./Login";
 import SignUp from "./SignUp";
@@ -25,6 +24,9 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "../firebase";
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from "firebase/firestore";
 
 const Home = () => {
   const [currentView, setCurrentView] = useState("role-selection");
@@ -34,55 +36,114 @@ const Home = () => {
   const [gameData, setGameData] = useState(null);
   const [currentTournament, setCurrentTournament] = useState(null);
   const [showNoTournamentDialog, setShowNoTournamentDialog] = useState(false);
-  const [tournamentHistory, setTournamentHistory] = useState([
-    {
-      id: "1",
-      name: "Summer Championship 2023",
-      date: "2023-06-15",
-      winner: "Disc Jockeys",
-      score: "15-12",
-      location: "Central Park",
-    },
-    {
-      id: "2",
-      name: "Spring Tournament 2023",
-      date: "2023-04-10",
-      winner: "Sky Walkers",
-      score: "15-13",
-      location: "Riverside Fields",
-    },
-    {
-      id: "3",
-      name: "Winter Indoor Cup 2022",
-      date: "2022-12-05",
-      winner: "Wind Chasers",
-      score: "15-11",
-      location: "Sports Complex",
-    },
-  ]);
-  const [gameHistory, setGameHistory] = useState([
-    {
-      id: "1",
-      date: "2023-06-15",
-      teamA: { name: "Disc Jockeys", score: 15 },
-      teamB: { name: "Sky Walkers", score: 12 },
-      duration: 87,
-    },
-    {
-      id: "2",
-      date: "2023-06-10",
-      teamA: { name: "Wind Chasers", score: 13 },
-      teamB: { name: "Disc Jockeys", score: 15 },
-      duration: 92,
-    },
-    {
-      id: "3",
-      date: "2023-06-05",
-      teamA: { name: "Sky Walkers", score: 15 },
-      teamB: { name: "Wind Chasers", score: 11 },
-      duration: 78,
-    },
-  ]);
+  const [tournamentHistory, setTournamentHistory] = useState([]);
+  const [gameHistory, setGameHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Check authentication state and load user data
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUserRole(userData.role);
+            setUsername(userData.displayName || user.email);
+            setIsLoggedIn(true);
+            
+            // After successful login, check if there's a current tournament
+            checkCurrentTournament();
+            fetchGameHistory();
+            fetchTournamentHistory();
+            
+            // Set the view to initial menu if already logged in
+            setCurrentView("initial-menu");
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setUserRole(null);
+        setUsername("");
+        setCurrentView("role-selection");
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch current active tournament
+  const checkCurrentTournament = async () => {
+    try {
+      const tournamentsRef = collection(db, "tournaments");
+      const q = query(
+        tournamentsRef, 
+        where("isFinished", "==", false),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const tournamentData = querySnapshot.docs[0].data();
+        setCurrentTournament({
+          id: querySnapshot.docs[0].id,
+          ...tournamentData
+        });
+      } else {
+        setCurrentTournament(null);
+      }
+    } catch (error) {
+      console.error("Error checking current tournament:", error);
+      setCurrentTournament(null);
+    }
+  };
+
+  // Fetch tournament history
+  const fetchTournamentHistory = async () => {
+    try {
+      const tournamentsRef = collection(db, "tournaments");
+      const q = query(
+        tournamentsRef, 
+        where("isFinished", "==", true),
+        orderBy("createdAt", "desc")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const tournaments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().endDate || doc.data().startDate
+      }));
+      
+      setTournamentHistory(tournaments);
+    } catch (error) {
+      console.error("Error fetching tournament history:", error);
+    }
+  };
+
+  // Fetch game history
+  const fetchGameHistory = async () => {
+    try {
+      const gamesRef = collection(db, "games");
+      const q = query(gamesRef, orderBy("createdAt", "desc"), limit(10));
+      
+      const querySnapshot = await getDocs(q);
+      const games = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
+      }));
+      
+      setGameHistory(games);
+    } catch (error) {
+      console.error("Error fetching game history:", error);
+    }
+  };
 
   const handleNavigate = (route) => {
     // If not logged in, force authentication flow
@@ -115,14 +176,18 @@ const Home = () => {
     setCurrentView("login");
   };
 
-  const handleLogin = (username, password) => {
-    // In a real app, you would validate credentials against a backend
-    // For this demo, we'll just accept any non-empty username/password
-    if (username && password) {
-      setIsLoggedIn(true);
-      setUsername(username);
-      setCurrentView("initial-menu");
-    }
+  const handleLogin = async (username, password) => {
+    // Authentication is handled by Firebase Auth in the Login component
+    // This function is called after successful authentication
+    setIsLoggedIn(true);
+    setUsername(username);
+    
+    // Fetch current tournament after login
+    await checkCurrentTournament();
+    await fetchGameHistory();
+    await fetchTournamentHistory();
+    
+    setCurrentView("initial-menu");
   };
 
   const handleBackToRoleSelection = () => {
@@ -131,6 +196,7 @@ const Home = () => {
   };
 
   const handleLogout = () => {
+    auth.signOut();
     setIsLoggedIn(false);
     setUsername("");
     setUserRole(null);
@@ -146,7 +212,7 @@ const Home = () => {
     const preparedGameData = {
       teamA: {
         name: gameData.teamA,
-        players: [
+        players: gameData.teamAPlayers || [
           { id: "1", name: "Player 1", number: "1" },
           { id: "2", name: "Player 2", number: "2" },
           { id: "3", name: "Player 3", number: "3" },
@@ -154,17 +220,18 @@ const Home = () => {
       },
       teamB: {
         name: gameData.teamB,
-        players: [
+        players: gameData.teamBPlayers || [
           { id: "4", name: "Player 4", number: "1" },
           { id: "5", name: "Player 5", number: "2" },
           { id: "6", name: "Player 6", number: "3" },
         ],
       },
       parameters: {
-        gameDuration: 90,
-        timeoutDuration: 70,
-        halftimeDuration: 10,
+        gameDuration: gameData.gameDuration || 90,
+        timeoutDuration: gameData.timeoutDuration || 70,
+        halftimeDuration: gameData.halftimeDuration || 10,
       },
+      tournamentId: currentTournament?.id,
     };
 
     setGameData(preparedGameData);
@@ -180,32 +247,31 @@ const Home = () => {
     setCurrentView("game");
   };
 
-  const handleEndGame = (finalGameData) => {
+  const handleEndGame = async (finalGameData) => {
     setGameData(finalGameData);
     setCurrentView("summary");
 
-    // Add to game history
-    const newHistoryEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString().split("T")[0],
-      teamA: {
-        name: finalGameData.teamAName,
-        score: finalGameData.teamAScore,
-      },
-      teamB: {
-        name: finalGameData.teamBName,
-        score: finalGameData.teamBScore,
-      },
-      duration: Math.floor(finalGameData.gameDuration / 60),
-    };
-
-    setGameHistory([newHistoryEntry, ...gameHistory]);
+    // Add game to history and update Firebase
+    // This will be implemented in GameScreen component
+    // Just update local state here
+    await fetchGameHistory();
   };
 
   const handleViewGameDetails = (gameId) => {
-    // In a real app, we would fetch the game details by ID
-    // For now, we'll just navigate to the summary view
-    setCurrentView("summary");
+    // Fetch game details by ID and set to current game
+    const fetchGameDetails = async () => {
+      try {
+        const gameDoc = await getDoc(doc(db, "games", gameId));
+        if (gameDoc.exists()) {
+          setGameData(gameDoc.data());
+          setCurrentView("summary");
+        }
+      } catch (error) {
+        console.error("Error fetching game details:", error);
+      }
+    };
+    
+    fetchGameDetails();
   };
 
   const handleBackToHome = () => {
@@ -229,12 +295,36 @@ const Home = () => {
   };
 
   const handleViewTournamentDetails = (tournamentId) => {
-    // In a real app, we would set the current tournament based on the ID
-    // For now, we'll just navigate to the game history view
-    setCurrentView("history");
+    // Fetch tournament details by ID
+    const fetchTournamentDetails = async () => {
+      try {
+        const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
+        if (tournamentDoc.exists()) {
+          // Set as current tournament temporarily for viewing
+          const tournamentData = tournamentDoc.data();
+          
+          // Fetch games for this tournament
+          const gamesRef = collection(db, "games");
+          const q = query(gamesRef, where("tournamentId", "==", tournamentId));
+          const gamesSnapshot = await getDocs(q);
+          const games = gamesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
+          }));
+          
+          setGameHistory(games);
+          setCurrentView("history");
+        }
+      } catch (error) {
+        console.error("Error fetching tournament details:", error);
+      }
+    };
+    
+    fetchTournamentDetails();
   };
 
-  const handleSaveTournament = (tournamentData) => {
+  const handleSaveTournament = async (tournamentData) => {
     if (tournamentData === null) {
       setCurrentView("initial-menu");
       return;
@@ -243,6 +333,9 @@ const Home = () => {
     // Save the tournament data and move to team management
     setCurrentTournament(tournamentData);
     setCurrentView("team-management");
+    
+    // Refresh current tournament data
+    await checkCurrentTournament();
   };
 
   const handleSaveTeams = () => {
@@ -250,26 +343,23 @@ const Home = () => {
     setCurrentView("tournament-menu");
   };
 
-  const handleFinishTournament = () => {
-    // Add current tournament to history
-    if (currentTournament) {
-      const finishedTournament = {
-        ...currentTournament,
-        date: new Date().toISOString().split("T")[0],
-        // In a real app, you would determine the winner and score
-        winner: "TBD",
-        score: "--",
-      };
-
-      setTournamentHistory([finishedTournament, ...tournamentHistory]);
-      setCurrentTournament(null);
-    }
-
+  const handleFinishTournament = async () => {
+    // Tournament is marked as finished in TournamentMenu component
+    // Just update state here
+    setCurrentTournament(null);
+    
+    // Refresh tournament history
+    await fetchTournamentHistory();
+    
     // Navigate back to initial menu
     setCurrentView("initial-menu");
   };
 
   const renderContent = () => {
+    if (loading) {
+      return <div className="flex items-center justify-center h-64">Loading...</div>;
+    }
+    
     switch (currentView) {
       case "role-selection":
         return <RoleSelection onRoleSelect={handleRoleSelect} />;
@@ -292,6 +382,7 @@ const Home = () => {
               setUserRole(role);
               setIsLoggedIn(true);
               setUsername(username);
+              setCurrentView("initial-menu");
             }}
             onBack={() => setCurrentView("login")}
             onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
@@ -318,6 +409,7 @@ const Home = () => {
             onTeamManagement={() => setCurrentView("team-management")}
             onFinishTournament={handleFinishTournament}
             userRole={userRole}
+            tournamentId={currentTournament?.id}
             tournamentName={currentTournament?.name || "Current Tournament"}
           />
         );
@@ -364,6 +456,7 @@ const Home = () => {
             initialTimeoutTime={gameData.parameters.timeoutDuration}
             initialHalftimeTime={gameData.parameters.halftimeDuration * 60}
             onEndGame={handleEndGame}
+            tournamentId={currentTournament?.id}
           />
         );
       case "summary":
@@ -390,15 +483,15 @@ const Home = () => {
           <GameHistory
             games={gameHistory}
             onViewGameDetails={handleViewGameDetails}
+            onBack={() => setCurrentView("tournament-menu")}
           />
         );
-      case "settings":
-        return <Settings />;
       case "tournament-setup":
         return (
           <TournamentSetup
             onSaveTournament={handleSaveTournament}
             userRole={userRole}
+            existingTournament={currentTournament}
           />
         );
       case "team-management":
@@ -407,16 +500,16 @@ const Home = () => {
             userRole={userRole}
             tournamentId={currentTournament?.id}
             onBack={() => setCurrentView("tournament-setup")}
-            onComplete={() => setCurrentView("tournament-menu")}
+            onComplete={handleSaveTeams}
           />
         );
       case "bracket-management":
-        return <BracketManagement userRole={userRole} />;
+        return <BracketManagement userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />;
       case "awards-calculation":
-        return <AwardsCalculation userRole={userRole} />;
+        return <AwardsCalculation userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />;
       case "marshall-assignments":
         return (
-          <MarshallAssignments userRole={userRole} onBack={handleBackToHome} />
+          <MarshallAssignments userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />
         );
       default:
         return <div>Page not found</div>;

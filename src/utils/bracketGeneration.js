@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
+import { db } from "../firebase";
+import { collection, addDoc, getDocs, query, where, updateDoc, doc } from "firebase/firestore";
 
 /**
  * Generate round-robin matches for a group of teams
@@ -255,4 +257,119 @@ export function generateNextRound(
     default:
       return [];
   }
+}
+
+// Firebase Integration Functions
+
+/**
+ * Save generated matches to Firestore
+ */
+export async function saveMatchesToFirestore(matches, tournamentId) {
+  try {
+    const batch = [];
+    for (const match of matches) {
+      const matchData = {
+        ...match,
+        tournamentId,
+        teamA: match.teamA ? { id: match.teamA.id, name: match.teamA.name } : null,
+        teamB: match.teamB ? { id: match.teamB.id, name: match.teamB.name } : null,
+        createdAt: new Date().toISOString(),
+      };
+      batch.push(addDoc(collection(db, "matches"), matchData));
+    }
+    await Promise.all(batch);
+    return true;
+  } catch (error) {
+    console.error("Error saving matches to Firestore:", error);
+    return false;
+  }
+}
+
+/**
+ * Fetch matches from Firestore for a tournament
+ */
+export async function fetchMatchesFromFirestore(tournamentId) {
+  try {
+    const matchesCollection = collection(db, "matches");
+    const q = query(matchesCollection, where("tournamentId", "==", tournamentId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error("Error fetching matches from Firestore:", error);
+    return [];
+  }
+}
+
+/**
+ * Update match result in Firestore
+ */
+export async function updateMatchResultInFirestore(matchId, scoreA, scoreB, status = "Completed") {
+  try {
+    const matchRef = doc(db, "matches", matchId);
+    await updateDoc(matchRef, {
+      scoreA, 
+      scoreB, 
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error updating match result in Firestore:", error);
+    return false;
+  }
+}
+
+/**
+ * Assign marshall to a match in Firestore
+ */
+export async function assignMarshallToMatch(matchId, marshallId, marshallName) {
+  try {
+    const matchRef = doc(db, "matches", matchId);
+    await updateDoc(matchRef, {
+      marshall: marshallId,
+      marshallName: marshallName,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error assigning marshall to match in Firestore:", error);
+    return false;
+  }
+}
+
+/**
+ * Update match status in Firestore
+ */
+export async function updateMatchStatus(matchId, status) {
+  try {
+    const matchRef = doc(db, "matches", matchId);
+    await updateDoc(matchRef, {
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error updating match status in Firestore:", error);
+    return false;
+  }
+}
+
+/**
+ * Generate and save bracket to Firestore
+ */
+export async function generateAndSaveBracket(tournamentId, teams, bracketType, startTime, defaultPitch) {
+  let matches = [];
+
+  switch (bracketType) {
+    case "roundRobin":
+      matches = generateRoundRobinMatches(teams, "A", startTime, defaultPitch);
+      break;
+    case "elimination":
+      matches = generateEliminationMatches(teams, "Quarter-Finals", startTime, defaultPitch);
+      break;
+    default:
+      return false;
+  }
+
+  return await saveMatchesToFirestore(matches, tournamentId);
 }

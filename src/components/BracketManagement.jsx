@@ -35,103 +35,25 @@ import {
   generateNextRound,
 } from "../utils/bracketGeneration";
 import { v4 as uuidv4 } from "uuid";
+import { db } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  addDoc,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
 
 const BracketManagement = ({
   tournamentId = "1",
   onBack = () => {},
   userRole = null,
-  teams = [
-    { id: "1", name: "Disc Jockeys", rank: 1, pool: "A" },
-    { id: "2", name: "Sky Walkers", rank: 2, pool: "A" },
-    { id: "3", name: "Wind Chasers", rank: 3, pool: "A" },
-    { id: "4", name: "Gravity Defiers", rank: 4, pool: "A" },
-    { id: "5", name: "Ultimate Stars", rank: 1, pool: "B" },
-    { id: "6", name: "Flying Discs", rank: 2, pool: "B" },
-    { id: "7", name: "Spin Masters", rank: 3, pool: "B" },
-    { id: "8", name: "Air Benders", rank: 4, pool: "B" },
-  ],
-  initialMatches = [
-    {
-      id: "1",
-      teamA: { id: "1", name: "Disc Jockeys" },
-      teamB: { id: "2", name: "Sky Walkers" },
-      scoreA: 15,
-      scoreB: 12,
-      pitch: "Pitch 1",
-      time: "2023-06-15T10:00",
-      status: "Completed",
-      round: "Round Robin",
-      bracket: "A",
-      marshall: "Charlene Layo",
-    },
-    {
-      id: "2",
-      teamA: { id: "3", name: "Wind Chasers" },
-      teamB: { id: "4", name: "Gravity Defiers" },
-      scoreA: 13,
-      scoreB: 15,
-      pitch: "Pitch 2",
-      time: "2023-06-15T10:00",
-      status: "Completed",
-      round: "Round Robin",
-      bracket: "A",
-      marshall: "Chris",
-    },
-    {
-      id: "3",
-      teamA: { id: "5", name: "Ultimate Stars" },
-      teamB: { id: "6", name: "Flying Discs" },
-      scoreA: 15,
-      scoreB: 10,
-      pitch: "Pitch 1",
-      time: "2023-06-15T12:00",
-      status: "Completed",
-      round: "Round Robin",
-      bracket: "B",
-      marshall: "Earl",
-    },
-    {
-      id: "4",
-      teamA: { id: "7", name: "Spin Masters" },
-      teamB: { id: "8", name: "Air Benders" },
-      scoreA: 11,
-      scoreB: 15,
-      pitch: "Pitch 2",
-      time: "2023-06-15T12:00",
-      status: "Completed",
-      round: "Round Robin",
-      bracket: "B",
-      marshall: "Charlene Layo",
-    },
-    {
-      id: "5",
-      teamA: { id: "1", name: "Disc Jockeys" },
-      teamB: { id: "4", name: "Gravity Defiers" },
-      scoreA: null,
-      scoreB: null,
-      pitch: "Pitch 1",
-      time: "2023-06-16T10:00",
-      status: "Scheduled",
-      round: "Crossover",
-      bracket: "A",
-      marshall: "Chris",
-    },
-    {
-      id: "6",
-      teamA: { id: "5", name: "Ultimate Stars" },
-      teamB: { id: "8", name: "Air Benders" },
-      scoreA: null,
-      scoreB: null,
-      pitch: "Pitch 2",
-      time: "2023-06-16T10:00",
-      status: "Scheduled",
-      round: "Crossover",
-      bracket: "B",
-      marshall: "Earl",
-    },
-  ],
 }) => {
-  const [matches, setMatches] = useState(initialMatches);
+  const [teams, setTeams] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [currentRound, setCurrentRound] = useState("Round Robin");
   const [currentBracket, setCurrentBracket] = useState("A");
   const [editingMatch, setEditingMatch] = useState(null);
@@ -149,23 +71,80 @@ const BracketManagement = ({
     bracket: currentBracket,
     marshall: "",
   });
+  const [loading, setLoading] = useState(true);
 
   // Get unique rounds from matches
   const rounds = Array.from(new Set(matches.map((match) => match.round)));
 
-  // Initialize with round robin if no matches exist
+  // Fetch teams and matches for the tournament
   useEffect(() => {
-    if (matches.length === 0) {
-      const poolATeams = teams.filter((team) => team.pool === "A");
-      const poolBTeams = teams.filter((team) => team.pool === "B");
+    const fetchTeamsAndMatches = async () => {
+      setLoading(true);
+      try {
+        // Fetch teams
+        const teamsCollection = collection(db, "teams");
+        const teamsQuery = query(teamsCollection, where("tournamentId", "==", tournamentId));
+        const teamsSnapshot = await getDocs(teamsQuery);
+        const teamsData = teamsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTeams(teamsData);
 
-      const roundRobinMatchesA = generateRoundRobinMatches(poolATeams, "A");
-      const roundRobinMatchesB = generateRoundRobinMatches(poolBTeams, "B");
+        // Fetch matches
+        const matchesCollection = collection(db, "matches");
+        const matchesQuery = query(matchesCollection, where("tournamentId", "==", tournamentId));
+        const matchesSnapshot = await getDocs(matchesQuery);
+        
+        if (matchesSnapshot.empty) {
+          // If no matches exist, initialize with round robin
+          const poolATeams = teamsData.filter((team) => team.pool === "A");
+          const poolBTeams = teamsData.filter((team) => team.pool === "B");
 
-      setMatches([...roundRobinMatchesA, ...roundRobinMatchesB]);
-      setCurrentRound("Round Robin");
-    }
-  }, []);
+          if (poolATeams.length > 0 || poolBTeams.length > 0) {
+            const roundRobinMatchesA = generateRoundRobinMatches(poolATeams, "A");
+            const roundRobinMatchesB = generateRoundRobinMatches(poolBTeams, "B");
+            
+            // Save initial matches to Firestore
+            const initialMatches = [...roundRobinMatchesA, ...roundRobinMatchesB];
+            await Promise.all(initialMatches.map(match => 
+              addDoc(collection(db, "matches"), { ...match, tournamentId })
+            ));
+            
+            setMatches(initialMatches);
+          }
+        } else {
+          // Format matches with team objects
+          const matchesData = await Promise.all(
+            matchesSnapshot.docs.map(async (matchDoc) => {
+              const matchData = matchDoc.data();
+              
+              // Find full team objects
+              const teamA = teamsData.find(team => team.id === matchData.teamAId) || null;
+              const teamB = teamsData.find(team => team.id === matchData.teamBId) || null;
+              
+              return {
+                id: matchDoc.id,
+                ...matchData,
+                teamA,
+                teamB
+              };
+            })
+          );
+          
+          setMatches(matchesData);
+          
+          // Set initial round if matches exist
+          if (matchesData.length > 0) {
+            const rounds = Array.from(new Set(matchesData.map(match => match.round)));
+            setCurrentRound(rounds[0] || "Round Robin");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+      setLoading(false);
+    };
+
+    fetchTeamsAndMatches();
+  }, [tournamentId]);
 
   // Filter matches by current round and bracket
   const filteredMatches = matches.filter(
@@ -177,16 +156,35 @@ const BracketManagement = ({
     setIsEditDialogOpen(true);
   };
 
-  const handleSaveMatch = () => {
+  const handleSaveMatch = async () => {
     if (!editingMatch) return;
 
-    setMatches(
-      matches.map((match) =>
-        match.id === editingMatch.id ? editingMatch : match,
-      ),
-    );
-    setIsEditDialogOpen(false);
-    setEditingMatch(null);
+    try {
+      // Update match in Firestore
+      const matchRef = doc(db, "matches", editingMatch.id);
+      
+      // Prepare data for Firestore (store team IDs instead of objects)
+      const matchData = {
+        ...editingMatch,
+        teamAId: editingMatch.teamA?.id || null,
+        teamBId: editingMatch.teamB?.id || null,
+        // Keep teamA and teamB objects for local state
+      };
+      
+      await updateDoc(matchRef, matchData);
+      
+      // Update local state
+      setMatches(
+        matches.map((match) =>
+          match.id === editingMatch.id ? editingMatch : match
+        )
+      );
+      
+      setIsEditDialogOpen(false);
+      setEditingMatch(null);
+    } catch (error) {
+      console.error("Error updating match:", error);
+    }
   };
 
   const handleAddMatch = () => {
@@ -205,25 +203,40 @@ const BracketManagement = ({
     setIsAddMatchDialogOpen(true);
   };
 
-  const handleSaveNewMatch = () => {
+  const handleSaveNewMatch = async () => {
     if (!newMatch.teamA || !newMatch.teamB) return;
 
-    const completeMatch = {
-      id: uuidv4(),
-      teamA: newMatch.teamA,
-      teamB: newMatch.teamB,
-      scoreA: newMatch.scoreA || null,
-      scoreB: newMatch.scoreB || null,
-      pitch: newMatch.pitch || "Pitch 1",
-      time: newMatch.time || new Date().toISOString(),
-      status: newMatch.status || "Scheduled",
-      round: newMatch.round || currentRound,
-      bracket: newMatch.bracket || currentBracket,
-      marshall: newMatch.marshall || "",
-    };
+    try {
+      const completeMatch = {
+        teamAId: newMatch.teamA.id,
+        teamBId: newMatch.teamB.id,
+        scoreA: newMatch.scoreA || null,
+        scoreB: newMatch.scoreB || null,
+        pitch: newMatch.pitch || "Pitch 1",
+        time: newMatch.time || new Date().toISOString(),
+        status: newMatch.status || "Scheduled",
+        round: newMatch.round || currentRound,
+        bracket: newMatch.bracket || currentBracket,
+        marshall: newMatch.marshall || "",
+        tournamentId: tournamentId,
+      };
 
-    setMatches([...matches, completeMatch]);
-    setIsAddMatchDialogOpen(false);
+      // Add to Firestore
+      const docRef = await addDoc(collection(db, "matches"), completeMatch);
+      
+      // Add to local state with the full team objects
+      const matchWithId = {
+        id: docRef.id,
+        ...completeMatch,
+        teamA: newMatch.teamA,
+        teamB: newMatch.teamB,
+      };
+      
+      setMatches([...matches, matchWithId]);
+      setIsAddMatchDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding match:", error);
+    }
   };
 
   const checkAllMatchesCompleted = (round) => {
@@ -234,7 +247,7 @@ const BracketManagement = ({
     );
   };
 
-  const generateNextRoundMatches = () => {
+  const generateNextRoundMatches = async () => {
     // Update team rankings based on match results
     const rankedTeams = updateTeamRankings(teams, matches);
 
@@ -334,10 +347,31 @@ const BracketManagement = ({
     }
 
     if (newMatches.length > 0) {
-      setMatches([...matches, ...newMatches]);
-      // Set current round to the newly generated round
-      if (newMatches[0]) {
-        setCurrentRound(newMatches[0].round);
+      try {
+        // Prepare matches for Firestore with team IDs
+        const firestoreMatches = newMatches.map(match => ({
+          ...match,
+          teamAId: match.teamA?.id || null,
+          teamBId: match.teamB?.id || null,
+          tournamentId: tournamentId
+        }));
+        
+        // Add to Firestore and get new IDs
+        const addedMatches = await Promise.all(
+          firestoreMatches.map(async (match) => {
+            const docRef = await addDoc(collection(db, "matches"), match);
+            return { id: docRef.id, ...match, teamA: match.teamA, teamB: match.teamB };
+          })
+        );
+        
+        setMatches([...matches, ...addedMatches]);
+        
+        // Set current round to the newly generated round
+        if (addedMatches[0]) {
+          setCurrentRound(addedMatches[0].round);
+        }
+      } catch (error) {
+        console.error("Error generating next round:", error);
       }
     }
   };
@@ -357,6 +391,23 @@ const BracketManagement = ({
           <p className="text-center text-muted-foreground">
             You don't have permission to access this section. Please contact a
             Head Marshall for assistance.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-center text-xl">
+            Loading...
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            Loading tournament bracket data...
           </p>
         </CardContent>
       </Card>
@@ -648,6 +699,21 @@ const BracketManagement = ({
                   </SelectContent>
                 </Select>
               </div>
+              
+              <div>
+                <Label htmlFor="marshall">Marshall</Label>
+                <Input
+                  id="marshall"
+                  value={editingMatch.marshall || ""}
+                  onChange={(e) =>
+                    setEditingMatch({
+                      ...editingMatch,
+                      marshall: e.target.value,
+                    })
+                  }
+                  placeholder="Assigned Marshall"
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -787,6 +853,21 @@ const BracketManagement = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="marshall">Marshall</Label>
+              <Input
+                id="marshall"
+                value={newMatch.marshall || ""}
+                onChange={(e) =>
+                  setNewMatch({
+                    ...newMatch,
+                    marshall: e.target.value,
+                  })
+                }
+                placeholder="Assigned Marshall"
+              />
             </div>
           </div>
           <DialogFooter>

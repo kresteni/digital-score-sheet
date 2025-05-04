@@ -11,8 +11,18 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Calendar, Trophy, Users, Clock } from "lucide-react";
-import { db, auth } from "../firebase"; // ✅ adjust path to your firebase.js
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "../firebase";
+import { 
+  addDoc, 
+  collection, 
+  serverTimestamp, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  updateDoc 
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 const TournamentSetup = ({ onSaveTournament, userRole }) => {
@@ -30,13 +40,105 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
   });
 
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [existingTournament, setExistingTournament] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser) {
+        checkExistingTournament(firebaseUser.uid);
+      } else {
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  const checkExistingTournament = async (userId) => {
+    try {
+      // Check for active tournaments (not marked as finished)
+      const tournamentsCollection = collection(db, "tournaments");
+      const activeQuery = query(
+        tournamentsCollection, 
+        where("status", "!=", "finished"),
+        where("createdBy", "==", userId)
+      );
+
+      // If no active tournaments found, try to find one without status field
+      // (for backward compatibility with existing data)
+      const querySnapshot = await getDocs(activeQuery);
+      
+      if (!querySnapshot.empty) {
+        // Tournament exists and is active
+        const tournament = querySnapshot.docs[0];
+        const tournamentData = tournament.data();
+        setExistingTournament({
+          id: tournament.id,
+          ...tournamentData
+        });
+        setTournamentData({
+          name: tournamentData.name || "",
+          startDate: tournamentData.startDate || new Date().toISOString().split("T")[0],
+          endDate: tournamentData.endDate || new Date(Date.now() + 86400000).toISOString().split("T")[0],
+          location: tournamentData.location || "",
+          maxTeams: tournamentData.maxTeams || 12,
+          format: tournamentData.format || "round-robin",
+          pointsCap: tournamentData.pointsCap || 15,
+          gameDuration: tournamentData.gameDuration || 90,
+          timeoutDuration: tournamentData.timeoutDuration || 70,
+          halftimeDuration: tournamentData.halftimeDuration || 10,
+        });
+        setIsEditing(true);
+      } else {
+        // Check for tournaments with no status field (older data)
+        const noStatusQuery = query(
+          tournamentsCollection,
+          where("createdBy", "==", userId)
+        );
+        
+        const noStatusSnapshot = await getDocs(noStatusQuery);
+        
+        if (!noStatusSnapshot.empty) {
+          // For each tournament without status, check if it has a finishedAt field
+          let activeTournament = null;
+          
+          for (const tournamentDoc of noStatusSnapshot.docs) {
+            const tournamentData = tournamentDoc.data();
+            if (!tournamentData.finishedAt) {
+              activeTournament = {
+                id: tournamentDoc.id,
+                ...tournamentData
+              };
+              break;
+            }
+          }
+          
+          if (activeTournament) {
+            setExistingTournament(activeTournament);
+            setTournamentData({
+              name: activeTournament.name || "",
+              startDate: activeTournament.startDate || new Date().toISOString().split("T")[0],
+              endDate: activeTournament.endDate || new Date(Date.now() + 86400000).toISOString().split("T")[0],
+              location: activeTournament.location || "",
+              maxTeams: activeTournament.maxTeams || 12,
+              format: activeTournament.format || "round-robin",
+              pointsCap: activeTournament.pointsCap || 15,
+              gameDuration: activeTournament.gameDuration || 90,
+              timeoutDuration: activeTournament.timeoutDuration || 70,
+              halftimeDuration: activeTournament.halftimeDuration || 10,
+            });
+            setIsEditing(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking for existing tournaments:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (field, value) => {
     setTournamentData((prev) => ({
@@ -53,19 +155,38 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
       return;
     }
 
-    const newTournament = {
-      ...tournamentData,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-    };
-
     try {
-      const docRef = await addDoc(collection(db, "tournaments"), newTournament);
-      alert("Tournament created successfully!");
-      onSaveTournament({ id: docRef.id, ...newTournament });
+      if (isEditing && existingTournament) {
+        // Update existing tournament
+        const tournamentRef = doc(db, "tournaments", existingTournament.id);
+        await updateDoc(tournamentRef, {
+          ...tournamentData,
+          updatedAt: serverTimestamp(),
+        });
+        
+        alert("Tournament updated successfully!");
+        onSaveTournament({ 
+          id: existingTournament.id, 
+          ...tournamentData,
+          createdBy: user.uid,
+          status: "active"
+        });
+      } else {
+        // Create new tournament
+        const newTournament = {
+          ...tournamentData,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          status: "active" // Add status field to make querying easier
+        };
+
+        const docRef = await addDoc(collection(db, "tournaments"), newTournament);
+        alert("Tournament created successfully!");
+        onSaveTournament({ id: docRef.id, ...newTournament });
+      }
     } catch (error) {
-      console.error("Error creating tournament:", error);
-      alert("Failed to create tournament.");
+      console.error("Error with tournament:", error);
+      alert("Failed to save tournament.");
     }
   };
 
@@ -85,11 +206,28 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
     );
   }
 
+  if (loading) {
+    return (
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-center text-xl">Loading...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            Checking for existing tournaments...
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto p-4 bg-background">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Tournament Setup</CardTitle>
+          <CardTitle className="text-2xl font-bold">
+            {isEditing ? "Edit Tournament" : "Tournament Setup"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -278,7 +416,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
                 Back
               </Button>
               <Button type="submit" size="lg">
-                Create Tournament
+                {isEditing ? "Update Tournament" : "Create Tournament"}
               </Button>
             </div>
           </form>

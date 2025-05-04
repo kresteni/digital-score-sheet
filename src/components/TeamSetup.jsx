@@ -19,6 +19,9 @@ import {
   where,
   getDocs,
   updateDoc,
+  addDoc,
+  onSnapshot,
+  serverTimestamp,
 } from "firebase/firestore";
 
 const TeamSetup = ({ tournamentId }) => {
@@ -28,33 +31,57 @@ const TeamSetup = ({ tournamentId }) => {
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [tournamentLocked, setTournamentLocked] = useState(false);
-
-  const user = auth.currentUser;
+  const [teamId, setTeamId] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!tournamentId || !user) return;
+    if (!tournamentId || !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
 
-    const fetchData = async () => {
-      const tournamentRef = doc(db, "tournaments", tournamentId); // Reference to tournament document
-      const tournamentSnap = await getDoc(tournamentRef);
+    const user = auth.currentUser;
 
-      if (tournamentSnap.exists()) {
-        const teamRef = collection(tournamentRef, "teams"); // Access teams subcollection under tournament
-        const teamQuery = query(teamRef, where("createdBy", "==", user.uid));
-        const teamSnap = await getDocs(teamQuery);
-
-        if (!teamSnap.empty) {
-          // Assuming there is only one team for the current user
-          const teamData = teamSnap.docs[0].data();
-          setTeamNameInput(teamData.teamName || "");
-          setPlayersList(teamData.players || []);
-          setTournamentLocked(teamData.locked || false);
-        }
+    // Set up a listener for the team data
+    const teamsCollection = collection(db, "teams");
+    const teamQuery = query(
+      teamsCollection, 
+      where("tournamentId", "==", tournamentId),
+      where("createdBy", "==", user.uid)
+    );
+    
+    const unsubscribeTeam = onSnapshot(teamQuery, async (teamSnapshot) => {
+      if (!teamSnapshot.empty) {
+        const teamDoc = teamSnapshot.docs[0];
+        const teamData = teamDoc.data();
+        
+        setTeamId(teamDoc.id);
+        setTeamNameInput(teamData.teamName || "");
+        setTournamentLocked(teamData.locked || false);
+        
+        // Now that we have the team ID, fetch the players
+        const playersCollection = collection(db, "players");
+        const playersQuery = query(playersCollection, where("teamId", "==", teamDoc.id));
+        
+        const playersSnapshot = await getDocs(playersQuery);
+        const playersData = playersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setPlayersList(playersData);
       }
-    };
+      
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching team data:", error);
+      setLoading(false);
+    });
 
-    fetchData();
-  }, [tournamentId, user]);
+    return () => {
+      unsubscribeTeam();
+    };
+  }, [tournamentId]);
 
   const handleTeamNameChange = (e) => {
     setTeamNameInput(e.target.value);
@@ -63,45 +90,109 @@ const TeamSetup = ({ tournamentId }) => {
   const handleAddPlayer = () => {
     if (newPlayerName.trim()) {
       const newPlayer = {
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Temporary ID for UI purposes
         name: newPlayerName.trim(),
-        number: newPlayerNumber.trim() || undefined,
+        number: newPlayerNumber.trim() || "",
+        // This is just for local state, will be replaced when saved to Firestore
       };
-      const updatedPlayers = [...playersList, newPlayer];
-      setPlayersList(updatedPlayers);
+      
+      setPlayersList([...playersList, newPlayer]);
       setNewPlayerName("");
       setNewPlayerNumber("");
     }
   };
 
   const handleRemovePlayer = (playerId) => {
-    const updatedPlayers = playersList.filter((p) => p.id !== playerId);
-    setPlayersList(updatedPlayers);
+    setPlayersList(playersList.filter((p) => p.id !== playerId));
   };
 
   const handleSaveTeam = async () => {
-    if (!user || !tournamentId) return;
+    if (!auth.currentUser || !tournamentId) return;
+    
+    const user = auth.currentUser;
     setIsSaving(true);
 
-    const tournamentRef = doc(db, "tournaments", tournamentId); // Reference to the tournament document
-    const teamRef = doc(tournamentRef, "teams", user.uid); // Reference to the user's team document within the tournament
-
     try {
-      // Save or update the team information for the current user
-      await setDoc(teamRef, {
-        teamName: teamNameInput,
-        players: playersList,
-        createdBy: user.uid,
-        locked: true, // Lock the tournament after saving
+      let teamDocRef;
+      
+      // Create or update team
+      if (teamId) {
+        // Update existing team
+        teamDocRef = doc(db, "teams", teamId);
+        await updateDoc(teamDocRef, {
+          teamName: teamNameInput,
+          updatedAt: serverTimestamp(),
+          locked: true,
+        });
+      } else {
+        // Create new team
+        const teamData = {
+          teamName: teamNameInput,
+          tournamentId,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          locked: true,
+        };
+        
+        const teamRef = collection(db, "teams");
+        const docRef = await addDoc(teamRef, teamData);
+        teamDocRef = docRef;
+        setTeamId(docRef.id);
+      }
+      
+      // Handle players
+      // For simplicity, we'll delete all existing players and add new ones
+      if (teamId) {
+        // First, fetch existing players to delete them
+        const playersCollection = collection(db, "players");
+        const playersQuery = query(playersCollection, where("teamId", "==", teamId));
+        const playersSnapshot = await getDocs(playersQuery);
+        
+        // Delete all existing players for this team
+        const playerDeletePromises = playersSnapshot.docs.map(playerDoc => {
+          const playerRef = doc(db, "players", playerDoc.id);
+          return updateDoc(playerRef, { deleted: true, deletedAt: serverTimestamp() });
+        });
+        
+        await Promise.all(playerDeletePromises);
+      }
+      
+      // Add all players from current state
+      const playerPromises = playersList.map(player => {
+        const playerData = {
+          name: player.name,
+          number: player.number || "",
+          teamId: teamId || teamDocRef.id,
+          tournamentId,
+          createdAt: serverTimestamp(),
+        };
+        
+        return addDoc(collection(db, "players"), playerData);
       });
-
+      
+      await Promise.all(playerPromises);
+      
       setTournamentLocked(true);
     } catch (error) {
       console.error("Error saving team:", error);
+      alert("Failed to save team data: " + error.message);
     } finally {
       setIsSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-md bg-white">
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">Loading Team Data...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>Please wait while we fetch your team information.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md bg-white">
@@ -192,7 +283,7 @@ const TeamSetup = ({ tournamentId }) => {
 
       <CardFooter className="flex justify-between border-t pt-4">
         {!tournamentLocked ? (
-          <Button onClick={handleSaveTeam} disabled={isSaving}>
+          <Button onClick={handleSaveTeam} disabled={isSaving} className="w-full">
             {isSaving ? "Saving..." : "Save Team"}
           </Button>
         ) : (

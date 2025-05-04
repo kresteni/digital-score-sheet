@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Disc3, History, Trophy, Users, Brackets, Award } from "lucide-react";
@@ -10,6 +10,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "./ui/dialog";
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 const TournamentMenu = ({
   onPlayGame = () => {},
@@ -22,11 +24,27 @@ const TournamentMenu = ({
   onFinishTournament = () => {},
   userRole = null,
   tournamentName = "Current Tournament",
+  currentTournament = null,
 }) => {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
 
-  const handleFinishTournament = () => {
+  const handleFinishTournament = async () => {
     setShowFinishDialog(false);
+    
+    // Update tournament status in Firestore
+    if (currentTournament && currentTournament.id) {
+      try {
+        const tournamentRef = doc(db, "tournaments", currentTournament.id);
+        await updateDoc(tournamentRef, {
+          status: "finished",
+          finishedAt: new Date().toISOString()
+        });
+        console.log("Tournament marked as finished in database");
+      } catch (err) {
+        console.error("Error marking tournament as finished:", err);
+      }
+    }
+    
     onFinishTournament();
   };
 
@@ -109,7 +127,7 @@ const TournamentMenu = ({
                 size={48}
                 className={userRole !== "head-marshall" ? "text-gray-400" : ""}
               />
-              <span>Tournament Setup</span>
+              <span>{currentTournament ? "Edit Tournament" : "Tournament Setup"}</span>
             </Button>
 
             {/* Team Management Button - Head Marshall Only */}
