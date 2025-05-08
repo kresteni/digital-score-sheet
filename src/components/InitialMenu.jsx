@@ -3,39 +3,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Trophy, Calendar, Disc3 } from "lucide-react";
 import { auth, db } from "../firebase";
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 const InitialMenu = ({
   onNewTournament = () => {},
   onCurrentTournament = () => {},
   onTournamentHistory = () => {},
-  userRole = null,
 }) => {
+  const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [hasActiveTournament, setHasActiveTournament] = useState(false);
 
   useEffect(() => {
-    const checkActiveTournament = async () => {
+    const fetchUserRole = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setUserRole(null);
+        setLoading(false);
+        return;
+      }
+
       try {
-        const tournamentsRef = collection(db, "tournaments");
-        const q = query(
-          tournamentsRef, 
-          where("isFinished", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(1)
-        );
-        
-        const querySnapshot = await getDocs(q);
-        setHasActiveTournament(!querySnapshot.empty);
-      } catch (error) {
-        console.error("Failed to check active tournaments:", error);
-        setHasActiveTournament(false);
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUserRole(userDoc.data().role);
+        } else {
+          setUserRole(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user role:", err);
+        setUserRole(null);
       } finally {
         setLoading(false);
       }
     };
 
-    checkActiveTournament();
+    fetchUserRole();
   }, []);
 
   return (
@@ -59,16 +61,13 @@ const InitialMenu = ({
               <Button
                 onClick={onNewTournament}
                 className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-primary hover:bg-primary/90 transition-all"
-                disabled={userRole !== "head-marshall" || hasActiveTournament}
-                title={hasActiveTournament && userRole === "head-marshall" ? 
-                  "A tournament is already in progress. You must finish it before creating a new one." : 
-                  (userRole !== "head-marshall" ? "Only Head Marshalls can create tournaments" : "Create a new tournament")}
+                disabled={userRole !== "head-marshall"}
               >
                 <Trophy
                   size={48}
-                  className={(userRole !== "head-marshall" || hasActiveTournament) ? "text-gray-400" : ""}
+                  className={userRole !== "head-marshall" ? "text-gray-400" : ""}
                 />
-                <span>{hasActiveTournament && userRole === "head-marshall" ? "Tournament In Progress" : "New Tournament"}</span>
+                <span>New Tournament</span>
               </Button>
 
               {/* Current Tournament Button */}
