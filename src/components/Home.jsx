@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import Header from "./Header";
 import GameSetup from "./GameSetup";
 import GameScreen from "./GameScreen";
 import GameSummary from "./GameSummary";
