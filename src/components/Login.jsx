@@ -7,13 +7,15 @@ import { LogIn, ArrowLeft } from "lucide-react";
 import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
-const Login = ({ userRole }) => {
+const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const userRole = location.state?.role || "marshall"; // Default to marshall if no role is provided
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -106,7 +108,7 @@ const Login = ({ userRole }) => {
             <div className="flex justify-center items-center gap-2 mt-4">
               <span>Don't have an account?</span>
               <button
-                onClick={() => navigate("/signup")}
+                onClick={() => navigate("/signup", { state: { role: userRole } })}
                 className="text-primary hover:underline font-medium"
                 type="button"
               >
