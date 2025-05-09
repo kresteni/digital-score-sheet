@@ -11,43 +11,83 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { db } from "../firebase";
-import { doc, updateDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
-const TournamentMenu = ({
-  userRole = null,
-  tournamentName = "Current Tournament",
-  currentTournament = null,
-}) => {
-  const [showFinishDialog, setShowFinishDialog] = useState(false);
+const TournamentMenu = () => {
   const navigate = useNavigate();
+  const { tournamentId } = useParams();
+  const { currentUser } = useAuth();
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [tournament, setTournament] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTournament = async () => {
+      try {
+        const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
+        if (tournamentDoc.exists()) {
+          setTournament({ id: tournamentDoc.id, ...tournamentDoc.data() });
+        }
+      } catch (error) {
+        console.error("Error fetching tournament:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (tournamentId) {
+      fetchTournament();
+    }
+  }, [tournamentId]);
 
   const handleFinishTournament = async () => {
     setShowFinishDialog(false);
     
-    // Update tournament status in Firestore
-    if (currentTournament && currentTournament.id) {
-      try {
-        const tournamentRef = doc(db, "tournaments", currentTournament.id);
-        await updateDoc(tournamentRef, {
-          status: "finished",
-          finishedAt: new Date().toISOString()
-        });
-        console.log("Tournament marked as finished in database");
-      } catch (err) {
-        console.error("Error marking tournament as finished:", err);
-      }
+    try {
+      const tournamentRef = doc(db, "tournaments", tournamentId);
+      await updateDoc(tournamentRef, {
+        isFinished: true,
+        finishedAt: new Date().toISOString()
+      });
+      console.log("Tournament marked as finished in database");
+      navigate("/");
+    } catch (error) {
+      console.error("Error marking tournament as finished:", error);
     }
-    
-    navigate("/");
   };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!tournament) {
+    return (
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-center text-xl">Tournament Not Found</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            The requested tournament could not be found.
+          </p>
+          <div className="flex justify-center mt-4">
+            <Button onClick={() => navigate("/")}>Back to Home</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isHeadMarshall = currentUser?.role === "head-marshall";
 
   return (
     <div className="w-full max-w-4xl mx-auto p-6 bg-background">
       <Card className="w-full shadow-lg border-2 border-primary/10">
         <CardHeader className="text-center pb-2">
           <CardTitle className="text-2xl md:text-3xl font-bold">
-            {tournamentName}
+            {tournament.name}
           </CardTitle>
           <p className="text-muted-foreground">Tournament Management</p>
         </CardHeader>
@@ -55,7 +95,7 @@ const TournamentMenu = ({
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
             {/* Play Game Button */}
             <Button
-              onClick={() => navigate("/game/play")}
+              onClick={() => navigate(`/tournament/${tournamentId}/game/play`)}
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-primary hover:bg-primary/90 transition-all"
             >
               <Disc3 size={48} />
@@ -64,7 +104,7 @@ const TournamentMenu = ({
 
             {/* Game History Button */}
             <Button
-              onClick={() => navigate("/game/history")}
+              onClick={() => navigate(`/tournament/${tournamentId}/game/history`)}
               variant="secondary"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-secondary hover:bg-secondary/90 transition-all"
             >
@@ -74,7 +114,7 @@ const TournamentMenu = ({
 
             {/* Bracket Management Button */}
             <Button
-              onClick={() => navigate("/tournament/brackets")}
+              onClick={() => navigate(`/tournament/${tournamentId}/brackets`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
             >
@@ -84,25 +124,21 @@ const TournamentMenu = ({
 
             {/* Marshall Assignments Button - Head Marshall Only */}
             <Button
-              onClick={() => navigate("/tournament/marshalls")}
+              onClick={() => navigate(`/tournament/${tournamentId}/marshalls`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
-              disabled={userRole !== "head-marshall"}
+              disabled={!isHeadMarshall}
             >
               <Users
                 size={48}
-                className={
-                  userRole !== "head-marshall"
-                    ? "text-gray-400"
-                    : "text-blue-500"
-                }
+                className={!isHeadMarshall ? "text-gray-400" : "text-blue-500"}
               />
               <span>Marshall Assignments</span>
             </Button>
 
             {/* Awards Button */}
             <Button
-              onClick={() => navigate("/tournament/awards")}
+              onClick={() => navigate(`/tournament/${tournamentId}/awards`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
             >
@@ -112,28 +148,28 @@ const TournamentMenu = ({
 
             {/* Tournament Setup Button - Head Marshall Only */}
             <Button
-              onClick={() => navigate("/tournament/setup")}
+              onClick={() => navigate(`/tournament/${tournamentId}/setup`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
-              disabled={userRole !== "head-marshall"}
+              disabled={!isHeadMarshall}
             >
               <Trophy
                 size={48}
-                className={userRole !== "head-marshall" ? "text-gray-400" : ""}
+                className={!isHeadMarshall ? "text-gray-400" : ""}
               />
-              <span>{currentTournament ? "Edit Tournament" : "Tournament Setup"}</span>
+              <span>Edit Tournament</span>
             </Button>
 
             {/* Team Management Button - Head Marshall Only */}
             <Button
-              onClick={() => navigate("/tournament/teams")}
+              onClick={() => navigate(`/tournament/${tournamentId}/teams`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
-              disabled={userRole !== "head-marshall"}
+              disabled={!isHeadMarshall}
             >
               <Users
                 size={48}
-                className={userRole !== "head-marshall" ? "text-gray-400" : ""}
+                className={!isHeadMarshall ? "text-gray-400" : ""}
               />
               <span>Team Management</span>
             </Button>
@@ -145,7 +181,7 @@ const TournamentMenu = ({
               onClick={() => setShowFinishDialog(true)}
               variant="destructive"
               className="px-8"
-              disabled={userRole !== "head-marshall"}
+              disabled={!isHeadMarshall}
             >
               Finish Tournament
             </Button>

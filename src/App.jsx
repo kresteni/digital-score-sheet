@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense } from "react";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -77,149 +77,152 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function AppContent() {
-  const navigate = useNavigate();
-  const { currentUser, loading } = useAuth();
-
-  const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
+const AppContent = () => {
+  const { currentUser } = useAuth();
 
   return (
-    <>
-      <Header 
-        onNavigate={navigate}
-        username={currentUser?.displayName || currentUser?.email}
-        userRole={currentUser?.role}
-        onLogout={handleLogout}
-      />
-      <main className="container mx-auto px-4 py-8">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/role-selection" element={<RoleSelection />} />
-          
-          {/* Admin Routes */}
-          <Route path="/tournament-setup" element={
-            <ProtectedRoute requiredRoles={['admin', 'head-marshall']}>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/role-selection" element={<RoleSelection />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/"
+          element={
+            currentUser ? (
+              <Home />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+
+        {/* Tournament Routes */}
+        <Route
+          path="/tournament/new/setup"
+          element={
+            currentUser ? (
               <TournamentSetup />
-            </ProtectedRoute>
-          } />
-          <Route path="/team-management" element={
-            <ProtectedRoute requiredRoles={['admin', 'head-marshall']}>
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/setup"
+          element={
+            currentUser ? (
+              <TournamentSetup />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/teams"
+          element={
+            currentUser ? (
               <TeamManagement />
-            </ProtectedRoute>
-          } />
-
-          {/* Marshall Routes */}
-          <Route path="/play-game" element={
-            <ProtectedRoute requiredRoles={['admin', 'head-marshall', 'marshall']}>
-              <PlayGame />
-            </ProtectedRoute>
-          } />
-          <Route path="/score-tracker" element={
-            <ProtectedRoute requiredRoles={['admin', 'head-marshall', 'marshall']}>
-              <ScoreTracker />
-            </ProtectedRoute>
-          } />
-
-          {/* Protected Routes (any authenticated user) */}
-          <Route path="/game-history" element={
-            <ProtectedRoute>
-              <GameHistory />
-            </ProtectedRoute>
-          } />
-          <Route path="/tournament-history" element={
-            <ProtectedRoute>
-              <TournamentHistory />
-            </ProtectedRoute>
-          } />
-          <Route path="/bracket-management" element={
-            <ProtectedRoute>
-              <BracketManagement />
-            </ProtectedRoute>
-          } />
-          <Route path="/assignment-schedule" element={
-            <ProtectedRoute>
-              <AssignmentSchedule />
-            </ProtectedRoute>
-          } />
-          <Route path="/awards-calculation" element={
-            <ProtectedRoute>
-              <AwardsCalculation />
-            </ProtectedRoute>
-          } />
-          <Route path="/team-setup" element={
-            <ProtectedRoute>
-              <TeamSetup />
-            </ProtectedRoute>
-          } />
-          <Route path="/game-parameters" element={
-            <ProtectedRoute>
-              <GameParameters />
-            </ProtectedRoute>
-          } />
-          <Route path="/game-screen" element={
-            <ProtectedRoute>
-              <GameScreen />
-            </ProtectedRoute>
-          } />
-          <Route path="/game-setup" element={
-            <ProtectedRoute>
-              <GameSetup />
-            </ProtectedRoute>
-          } />
-          <Route path="/game-summary" element={
-            <ProtectedRoute>
-              <GameSummary />
-            </ProtectedRoute>
-          } />
-          <Route path="/game-timer" element={
-            <ProtectedRoute>
-              <GameTimer />
-            </ProtectedRoute>
-          } />
-          <Route path="/initial-menu" element={
-            <ProtectedRoute>
-              <InitialMenu />
-            </ProtectedRoute>
-          } />
-          <Route path="/marshall-assignments" element={
-            <ProtectedRoute>
-              <MarshallAssignments />
-            </ProtectedRoute>
-          } />
-          <Route path="/player-stats" element={
-            <ProtectedRoute>
-              <PlayerStats />
-            </ProtectedRoute>
-          } />
-          <Route path="/tournament-games" element={
-            <ProtectedRoute>
-              <TournamentGames />
-            </ProtectedRoute>
-          } />
-          <Route path="/tournament-history-list" element={
-            <ProtectedRoute>
-              <TournamentHistoryList />
-            </ProtectedRoute>
-          } />
-          <Route path="/tournament-menu" element={
-            <ProtectedRoute>
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/menu"
+          element={
+            currentUser ? (
               <TournamentMenu />
-            </ProtectedRoute>
-          } />
-        </Routes>
-      </main>
-    </>
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/brackets"
+          element={
+            currentUser ? (
+              <BracketManagement />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/marshalls"
+          element={
+            currentUser ? (
+              <MarshallAssignments />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/awards"
+          element={
+            currentUser ? (
+              <AwardsCalculation />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+
+        {/* Game Routes */}
+        <Route
+          path="/tournament/:tournamentId/game/play"
+          element={
+            currentUser ? (
+              <GameScreen />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/game/history"
+          element={
+            currentUser ? (
+              <GameHistory />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+        <Route
+          path="/tournament/:tournamentId/game/summary"
+          element={
+            currentUser ? (
+              <GameSummary />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+
+        {/* Tournament History Route */}
+        <Route
+          path="/tournament-history"
+          element={
+            currentUser ? (
+              <TournamentHistoryList />
+            ) : (
+              <Navigate to="/role-selection" replace />
+            )
+          }
+        />
+
+        {/* Catch-all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
-}
+};
 
 function App() {
   return (

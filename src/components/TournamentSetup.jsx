@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -12,10 +13,12 @@ import {
 } from "./ui/select";
 import { Calendar, Trophy, Users, Clock } from "lucide-react";
 import { db, auth } from "../firebase"; // ✅ adjust path to your firebase.js
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
-const TournamentSetup = ({ onSaveTournament, userRole }) => {
+const TournamentSetup = () => {
+  const navigate = useNavigate();
+  const { tournamentId } = useParams();
   const [tournamentData, setTournamentData] = useState({
     name: "",
     startDate: new Date().toISOString().split("T")[0],
@@ -30,6 +33,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
   });
 
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -37,6 +41,24 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const fetchTournament = async () => {
+      if (tournamentId && tournamentId !== "new") {
+        try {
+          const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
+          if (tournamentDoc.exists()) {
+            setTournamentData(tournamentDoc.data());
+          }
+        } catch (error) {
+          console.error("Error fetching tournament:", error);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchTournament();
+  }, [tournamentId]);
 
   const handleChange = (field, value) => {
     setTournamentData((prev) => ({
@@ -57,19 +79,24 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
       ...tournamentData,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
+      isFinished: false,
     };
 
     try {
       const docRef = await addDoc(collection(db, "tournaments"), newTournament);
       alert("Tournament created successfully!");
-      onSaveTournament({ id: docRef.id, ...newTournament });
+      navigate(`/tournament/${docRef.id}/teams`);
     } catch (error) {
       console.error("Error creating tournament:", error);
       alert("Failed to create tournament.");
     }
   };
 
-  if (userRole !== "head-marshall") {
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
     return (
       <Card className="w-full max-w-3xl mx-auto">
         <CardHeader>
@@ -77,8 +104,7 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
         </CardHeader>
         <CardContent>
           <p className="text-center text-muted-foreground">
-            Only Head Marshalls can set up tournaments. Please contact a Head
-            Marshall for assistance.
+            You must be logged in to access this page.
           </p>
         </CardContent>
       </Card>
@@ -269,16 +295,16 @@ const TournamentSetup = ({ onSaveTournament, userRole }) => {
               </div>
             </div>
 
-            <div className="flex justify-between pt-4">
+            <div className="flex justify-end gap-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onSaveTournament(null)}
+                onClick={() => navigate("/")}
               >
-                Back
+                Cancel
               </Button>
-              <Button type="submit" size="lg">
-                Create Tournament
+              <Button type="submit">
+                {tournamentId === "new" ? "Create Tournament" : "Update Tournament"}
               </Button>
             </div>
           </form>

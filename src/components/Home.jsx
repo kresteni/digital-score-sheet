@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Header from "./Header";
+// import Header from "./Header"; // Removed duplicate header import
 import GameSetup from "./GameSetup";
 import GameScreen from "./GameScreen";
 import GameSummary from "./GameSummary";
@@ -41,7 +41,8 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const [currentView, setCurrentView] = useState("initial-menu");
+  const [currentView, setCurrentView] = useState("dashboard");
+  const [createdTournament, setCreatedTournament] = useState(null);
 
   // Check authentication state and load user data
   useEffect(() => {
@@ -229,16 +230,21 @@ const Home = () => {
   };
 
   const handleNewTournament = () => {
-    setCurrentTournament(null);
-    navigate("/tournament/new");
+    setCreatedTournament(null); // Reset any previous tournament
+    setCurrentView("tournament-setup");
   };
 
   const handleCurrentTournament = () => {
-    navigate("/tournament/current");
+    if (!currentTournament) {
+      setShowNoTournamentDialog(true);
+    } else {
+      setCreatedTournament(currentTournament);
+      setCurrentView("tournament-menu");
+    }
   };
 
   const handleTournamentHistory = () => {
-    navigate("/tournament/history");
+    navigate("/tournament-history");
   };
 
   const handleNewGame = () => {
@@ -296,119 +302,109 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header
-        onNavigate={handleNavigate}
-        userRole={isLoggedIn ? userRole : null}
-        username={isLoggedIn ? username : ""}
-        onLogout={handleLogout}
-      />
-      <main className="container mx-auto py-6">
-        {renderContent()}
-        
-        <Routes>
-          <Route path="/" element={<InitialMenu
-            onNewTournament={handleNewTournament}
-            onCurrentTournament={handleCurrentTournament}
-            onTournamentHistory={handleTournamentHistory}
-            userRole={userRole}
-          />} />
-          <Route path="/role-selection" element={<RoleSelection onRoleSelect={handleRoleSelect} />} />
-          <Route path="/login" element={<Login
-            userRole={userRole}
-            onLogin={handleLogin}
-            onBack={handleBackToRoleSelection}
-            onCreateAccount={() => setCurrentView("signup")}
-            onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
-          />} />
-          <Route path="/signup" element={<SignUp
-            onSignUp={(username, password, name, role) => {
-              setUserRole(role);
-              setIsLoggedIn(true);
-              setUsername(username);
-              setCurrentView("initial-menu");
-            }}
-            onBack={() => setCurrentView("login")}
-            onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
-          />} />
-          <Route path="/tournament/new" element={<TournamentSetup
-            onSaveTournament={handleSaveTournament}
-            userRole={userRole}
-            existingTournament={currentTournament}
-          />} />
-          <Route path="/tournament/current" element={<TournamentMenu
-            onPlayGame={handleNewGame}
-            onViewGameHistory={() => setCurrentView("history")}
-            onBracketManagement={() => setCurrentView("bracket-management")}
-            onMarshallAssignments={() => setCurrentView("marshall-assignments")}
-            onAwardsCalculation={() => setCurrentView("awards-calculation")}
-            onTournamentSetup={() => setCurrentView("tournament-setup")}
-            onTeamManagement={() => setCurrentView("team-management")}
-            onFinishTournament={handleFinishTournament}
-            userRole={userRole}
-            tournamentId={currentTournament?.id}
-            tournamentName={currentTournament?.name || "Current Tournament"}
-          />} />
-          <Route path="/tournament/history" element={<TournamentHistoryList
-            tournaments={tournamentHistory}
-            onViewTournament={handleViewTournamentDetails}
-            onBack={() => setCurrentView("initial-menu")}
-          />} />
-          <Route path="/tournament/setup" element={<TournamentSetup
-            onSaveTournament={handleSaveTournament}
-            userRole={userRole}
-            existingTournament={currentTournament}
-          />} />
-          <Route path="/tournament/teams" element={<TeamManagement
-            userRole={userRole}
-            tournamentId={currentTournament?.id}
-            onBack={() => setCurrentView("tournament-setup")}
-            onComplete={handleSaveTeams}
-          />} />
-          <Route path="/tournament/brackets" element={<BracketManagement
-            userRole={userRole}
-            tournamentId={currentTournament?.id}
-            onBack={() => setCurrentView("tournament-menu")}
-          />} />
-          <Route path="/tournament/marshalls" element={<MarshallAssignments
-            userRole={userRole}
-            tournamentId={currentTournament?.id}
-            onBack={() => setCurrentView("tournament-menu")}
-          />} />
-          <Route path="/tournament/awards" element={<AwardsCalculation
-            userRole={userRole}
-            tournamentId={currentTournament?.id}
-            onBack={() => setCurrentView("tournament-menu")}
-          />} />
-          <Route path="/game/play" element={<GameScreen
-            teamAName={gameData?.teamA?.name}
-            teamBName={gameData?.teamB?.name}
-            teamAPlayers={gameData?.teamA?.players}
-            teamBPlayers={gameData?.teamB?.players}
-            initialGameTime={gameData?.parameters?.gameDuration * 60}
-            initialTimeoutTime={gameData?.parameters?.timeoutDuration}
-            initialHalftimeTime={gameData?.parameters?.halftimeDuration * 60}
-            onEndGame={handleEndGame}
-            tournamentId={currentTournament?.id}
-          />} />
-          <Route path="/game/history" element={<GameHistory
-            games={gameHistory}
-            onViewGameDetails={handleViewGameDetails}
-            onBack={() => setCurrentView("tournament-menu")}
-          />} />
-          <Route path="/game/summary" element={<GameSummary
-            teamAName={gameData?.teamA?.name || gameData?.teamAName}
-            teamBName={gameData?.teamB?.name || gameData?.teamBName}
-            teamAScore={gameData?.teamAScore || 0}
-            teamBScore={gameData?.teamBScore || 0}
-            teamAPlayers={gameData?.teamAPlayers || []}
-            teamBPlayers={gameData?.teamBPlayers || []}
-            gameDuration={`${Math.floor((gameData?.parameters?.gameDuration || 90) / 60)}h ${(gameData?.parameters?.gameDuration || 90) % 60}m`}
-            gameDate={gameData?.gameDate ? new Date(gameData.gameDate).toLocaleDateString() : new Date().toLocaleDateString()}
-            onBackToHome={handleBackToHome}
-          />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      {renderContent()}
+      
+      <Routes>
+        <Route path="/" element={<InitialMenu
+          onNewTournament={handleNewTournament}
+          onCurrentTournament={handleCurrentTournament}
+          onTournamentHistory={handleTournamentHistory}
+          userRole={userRole}
+          currentTournament={currentTournament}
+        />} />
+        <Route path="/role-selection" element={<RoleSelection onRoleSelect={handleRoleSelect} />} />
+        <Route path="/login" element={<Login
+          userRole={userRole}
+          onLogin={handleLogin}
+          onBack={handleBackToRoleSelection}
+          onCreateAccount={() => setCurrentView("signup")}
+          onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
+        />} />
+        <Route path="/signup" element={<SignUp
+          onSignUp={(username, password, name, role) => {
+            setUserRole(role);
+            setIsLoggedIn(true);
+            setUsername(username);
+            setCurrentView("initial-menu");
+          }}
+          onBack={() => setCurrentView("login")}
+          onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
+        />} />
+        <Route path="/tournament/new" element={<TournamentSetup
+          onSaveTournament={(tournamentData) => {
+            setCreatedTournament(tournamentData); // Save the created tournament
+            setCurrentView("team-setup");
+          }}
+          userRole={userRole}
+          existingTournament={createdTournament}
+        />} />
+        <Route path="/tournament/current" element={<TournamentMenu
+          userRole={userRole}
+          tournamentId={createdTournament?.id}
+          tournamentData={createdTournament}
+          onFinishTournament={() => setCurrentView("dashboard")}
+        />} />
+        <Route path="/tournament/history" element={<TournamentHistoryList
+          tournaments={tournamentHistory}
+          onViewTournament={handleViewTournamentDetails}
+          onBack={() => setCurrentView("initial-menu")}
+        />} />
+        <Route path="/tournament/setup" element={<TournamentSetup
+          onSaveTournament={handleSaveTournament}
+          userRole={userRole}
+          existingTournament={currentTournament}
+        />} />
+        <Route path="/tournament/teams" element={<TeamManagement
+          userRole={userRole}
+          tournamentId={currentTournament?.id}
+          onBack={() => setCurrentView("tournament-setup")}
+          onComplete={handleSaveTeams}
+          showDoneButton={true}
+        />} />
+        <Route path="/tournament/brackets" element={<BracketManagement
+          userRole={userRole}
+          tournamentId={currentTournament?.id}
+          onBack={() => setCurrentView("tournament-menu")}
+        />} />
+        <Route path="/tournament/marshalls" element={<MarshallAssignments
+          userRole={userRole}
+          tournamentId={currentTournament?.id}
+          onBack={() => setCurrentView("tournament-menu")}
+        />} />
+        <Route path="/tournament/awards" element={<AwardsCalculation
+          userRole={userRole}
+          tournamentId={currentTournament?.id}
+          onBack={() => setCurrentView("tournament-menu")}
+        />} />
+        <Route path="/game/play" element={<GameScreen
+          teamAName={gameData?.teamA?.name}
+          teamBName={gameData?.teamB?.name}
+          teamAPlayers={gameData?.teamA?.players}
+          teamBPlayers={gameData?.teamB?.players}
+          initialGameTime={gameData?.parameters?.gameDuration * 60}
+          initialTimeoutTime={gameData?.parameters?.timeoutDuration}
+          initialHalftimeTime={gameData?.parameters?.halftimeDuration * 60}
+          onEndGame={handleEndGame}
+          tournamentId={currentTournament?.id}
+        />} />
+        <Route path="/game/history" element={<GameHistory
+          games={gameHistory}
+          onViewGameDetails={handleViewGameDetails}
+          onBack={() => setCurrentView("tournament-menu")}
+        />} />
+        <Route path="/game/summary" element={<GameSummary
+          teamAName={gameData?.teamA?.name || gameData?.teamAName}
+          teamBName={gameData?.teamB?.name || gameData?.teamBName}
+          teamAScore={gameData?.teamAScore || 0}
+          teamBScore={gameData?.teamBScore || 0}
+          teamAPlayers={gameData?.teamAPlayers || []}
+          teamBPlayers={gameData?.teamBPlayers || []}
+          gameDuration={`${Math.floor((gameData?.parameters?.gameDuration || 90) / 60)}h ${(gameData?.parameters?.gameDuration || 90) % 60}m`}
+          gameDate={gameData?.gameDate ? new Date(gameData.gameDate).toLocaleDateString() : new Date().toLocaleDateString()}
+          onBackToHome={handleBackToHome}
+        />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
       {/* No Current Tournament Dialog */}
       <Dialog
@@ -419,29 +415,24 @@ const Home = () => {
           <DialogHeader>
             <DialogTitle>No Current Tournament</DialogTitle>
             <DialogDescription>
-              There is no active tournament. Please create a new tournament
-              first.
+              There is no active tournament. Please create a new tournament first.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
             <Button
               onClick={() => {
                 setShowNoTournamentDialog(false);
-                setCurrentView("initial-menu");
+                handleNewTournament(); // Start the new tournament flow
               }}
+            >
+              Create Tournament
+            </Button>
+            <Button
+              onClick={() => setShowNoTournamentDialog(false)}
+              variant="outline"
             >
               Back to Menu
             </Button>
-            {userRole === "head-marshall" && (
-              <Button
-                onClick={() => {
-                  setShowNoTournamentDialog(false);
-                  handleNewTournament();
-                }}
-              >
-                Create Tournament
-              </Button>
-            )}
           </div>
         </DialogContent>
       </Dialog>
