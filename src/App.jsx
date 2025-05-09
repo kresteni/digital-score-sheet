@@ -92,6 +92,12 @@ function AppContent() {
 
   return (
     <>
+      <Header
+        onNavigate={navigate}
+        username={currentUser?.displayName || currentUser?.email}
+        userRole={currentUser?.role}
+        onLogout={handleLogout}
+      />
       <main className="container mx-auto px-4 py-8">
         <Routes>
           <Route path="/" element={<Home />} />
