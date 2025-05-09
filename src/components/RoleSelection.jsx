@@ -1,15 +1,35 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Shield, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const RoleSelection = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    // If user is already logged in, redirect to initial menu
+    if (currentUser) {
+      navigate("/");
+    }
+  }, [currentUser, navigate]);
 
   const handleRoleSelect = (role) => {
+    setSelected(role);
+    // Clear any existing user data
+    localStorage.removeItem('userData');
+    
+    // Store selected role
     localStorage.setItem('selectedRole', role);
-    navigate('/login', { state: { role } });
+    
+    // Navigate to login with role
+    navigate('/login', { 
+      state: { role },
+      replace: true 
+    });
   };
 
   return (
@@ -42,14 +62,14 @@ const RoleSelection = () => {
             </Button>
           </div>
 
-          <div className="mt-8 text-center text-sm text-muted-foreground">
+          <div className="mt-8 text-center text-base">
             <p>
-              <strong>Head Marshall:</strong> Full access to all game management
-              features
+              <span className="font-bold text-[#223046]">Head Marshall:</span>
+              <span className="text-[#3B4A5A]"> Full access to all game management features</span>
             </p>
             <p className="mt-2">
-              <strong>Marshall:</strong> Limited access to assist with game
-              tracking
+              <span className="font-bold text-[#223046]">Marshall:</span>
+              <span className="text-[#3B4A5A]"> Limited access to assist with game tracking</span>
             </p>
           </div>
         </CardContent>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -13,16 +13,26 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
+  const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Get user data from Firestore
-        try {
+      try {
+        if (user) {
+          // Get user data from Firestore
           const userDoc = await getDoc(doc(db, 'users', user.uid));
+          
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUserData(data);
+            setUserRole(data.role || 'user');
+            
+            // Update last login timestamp
+            await updateDoc(doc(db, 'users', user.uid), {
+              lastLogin: new Date()
+            });
+
             // Merge user data with auth user
             setCurrentUser({
               ...user,
@@ -30,31 +40,65 @@ export function AuthProvider({ children }) {
               displayName: data.displayName || user.email,
               ...data
             });
+
+            // Store in localStorage for persistence
+            localStorage.setItem('userData', JSON.stringify({
+              uid: user.uid,
+              email: user.email,
+              role: data.role,
+              displayName: data.displayName || user.email
+            }));
           } else {
             setCurrentUser(user);
+            setUserRole(null);
+            setError('User data not found');
           }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          setCurrentUser(user);
+        } else {
+          setCurrentUser(null);
+          setUserData(null);
+          setUserRole(null);
+          localStorage.removeItem('userData');
         }
-      } else {
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+        setError(error.message);
         setCurrentUser(null);
         setUserData(null);
+        setUserRole(null);
+        localStorage.removeItem('userData');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentUser(null);
+      setUserData(null);
+      setUserRole(null);
+      localStorage.removeItem('userData');
+      localStorage.removeItem('selectedRole');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setError(error.message);
+    }
+  };
+
   const value = {
     currentUser,
     userData,
     loading,
+    error,
+    logout,
+    userRole,
     isAuthenticated: !!currentUser,
-    isAdmin: currentUser?.role === 'admin',
-    isHeadMarshall: currentUser?.role === 'head-marshall',
-    isMarshall: currentUser?.role === 'marshall'
+    isAdmin: userRole === 'admin',
+    isHeadMarshall: userRole === 'head-marshall',
+    isMarshall: userRole === 'marshall'
   };
 
   return (

@@ -20,15 +20,44 @@ const SignUp = () => {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("marshall");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const validateForm = () => {
+    if (!email.trim() || !username.trim() || !password.trim() || !name.trim() || !confirmPassword.trim()) {
+      setError("Please fill in all fields");
+      return false;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return false;
+    }
+
+    if (!email.includes('@')) {
+      setError("Please enter a valid email address");
+      return false;
+    }
+
+    return true;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !username.trim() || !password.trim() || !name.trim()) {
-      setError("Please fill in all fields");
+    setError("");
+    setIsLoading(true);
+
+    if (!validateForm()) {
+      setIsLoading(false);
       return;
     }
 
@@ -43,12 +72,44 @@ const SignUp = () => {
         name,
         role,
         createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
       });
 
-      navigate("/");
+      // Store user data in localStorage
+      localStorage.setItem('userData', JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        role: role,
+        displayName: name
+      }));
+
+      // Navigate based on role
+      if (role === 'head-marshall') {
+        navigate("/tournament/new/setup");
+      } else {
+        navigate("/tournament-history");
+      }
     } catch (err) {
-      console.error("Error signing up:", err.code, err.message);
-      setError(`Error: ${err.message}`);
+      console.error("Error signing up:", err);
+      let errorMessage = "An error occurred during registration.";
+      
+      switch (err.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = "An account with this email already exists.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "Invalid email format.";
+          break;
+        case 'auth/weak-password':
+          errorMessage = "Password is too weak. Please use a stronger password.";
+          break;
+        default:
+          errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -68,6 +129,8 @@ const SignUp = () => {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
@@ -79,6 +142,8 @@ const SignUp = () => {
                 placeholder="Enter your full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
@@ -90,6 +155,8 @@ const SignUp = () => {
                 placeholder="Choose a username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
@@ -101,12 +168,31 @@ const SignUp = () => {
                 placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(value) => setRole(value)}>
+              <Select 
+                value={role} 
+                onValueChange={(value) => setRole(value)}
+                disabled={isLoading}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
@@ -127,13 +213,18 @@ const SignUp = () => {
                 variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => navigate("/role-selection")}
+                disabled={isLoading}
               >
                 <ArrowLeft size={16} />
                 Back
               </Button>
-              <Button type="submit" className="flex items-center gap-2 flex-1">
+              <Button 
+                type="submit" 
+                className="flex items-center gap-2 flex-1"
+                disabled={isLoading}
+              >
                 <UserPlus size={16} />
-                Sign Up
+                {isLoading ? "Creating Account..." : "Sign Up"}
               </Button>
             </div>
           </form>

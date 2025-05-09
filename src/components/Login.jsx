@@ -8,6 +8,7 @@ import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const Login = () => {
   const location = useLocation();
@@ -15,7 +16,9 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     if (location.state?.role) {
@@ -24,11 +27,21 @@ const Login = () => {
     }
   }, [location.state]);
 
+  useEffect(() => {
+    // If already logged in, redirect to initial menu
+    if (currentUser) {
+      navigate("/");
+    }
+  }, [currentUser, navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
     if (!email.trim() || !password.trim()) {
       setError("Please enter both email and password");
+      setIsLoading(false);
       return;
     }
 
@@ -44,20 +57,52 @@ const Login = () => {
       if (docSnap.exists()) {
         const userData = docSnap.data();
 
-        // Optional: role validation
+        // Role validation
         if (userData.role !== userRole) {
+          await auth.signOut();
           setError("Role mismatch. Please log in using the correct role.");
+          setIsLoading(false);
           return;
         }
 
-        // All good, login success
+        // Store user data in localStorage for persistence
+        localStorage.setItem('userData', JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          role: userData.role,
+          displayName: userData.name || user.email
+        }));
+
+        // Navigate to initial menu
         navigate("/");
       } else {
         setError("No user data found. Please contact support.");
+        await auth.signOut();
       }
     } catch (err) {
-      console.error("Login error:", err.message);
-      setError(`Error: ${err.message}`);
+      console.error("Login error:", err);
+      let errorMessage = "An error occurred during login.";
+      
+      switch (err.code) {
+        case 'auth/user-not-found':
+          errorMessage = "No account found with this email.";
+          break;
+        case 'auth/wrong-password':
+          errorMessage = "Incorrect password.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "Invalid email format.";
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = "Too many failed attempts. Please try again later.";
+          break;
+        default:
+          errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -79,6 +124,8 @@ const Login = () => {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
@@ -90,6 +137,8 @@ const Login = () => {
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                required
               />
             </div>
 
@@ -103,13 +152,18 @@ const Login = () => {
                 variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => navigate("/role-selection")}
+                disabled={isLoading}
               >
                 <ArrowLeft size={16} />
                 Back
               </Button>
-              <Button type="submit" className="flex items-center gap-2 flex-1">
+              <Button 
+                type="submit" 
+                className="flex items-center gap-2 flex-1"
+                disabled={isLoading}
+              >
                 <LogIn size={16} />
-                Login
+                {isLoading ? "Logging in..." : "Login"}
               </Button>
             </div>
             <div className="flex justify-center items-center gap-2 mt-4">
@@ -118,6 +172,7 @@ const Login = () => {
                 onClick={() => navigate("/signup")}
                 className="text-primary hover:underline font-medium"
                 type="button"
+                disabled={isLoading}
               >
                 Create Account
               </button>

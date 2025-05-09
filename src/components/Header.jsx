@@ -22,24 +22,24 @@ import {
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
 import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
-/**
- * @param {{
- *  title?: string,
- *  onNavigate?: (route: string) => void,
- *  userRole?: "head-marshall" | "marshall" | null,
- *  username?: string,
- *  onLogout?: () => void
- * }} props
- */
-const Header = ({
-  title = "Ultimate Scorekeeper",
-  onNavigate = () => {},
-  userRole = null,
-  username = "",
-  onLogout = () => {},
-}) => {
-  const { currentUser } = useAuth();
+const Header = () => {
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleNavigation = (path) => {
+    navigate(path);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/role-selection");
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
 
   const renderNavigation = () => {
     if (!currentUser) {
@@ -47,7 +47,7 @@ const Header = ({
         <NavigationMenuItem>
           <NavigationMenuLink
             className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-            onClick={() => onNavigate("/login")}
+            onClick={() => handleNavigation("/login")}
           >
             <LogIn className="mr-2 h-4 w-4" />
             Login
@@ -61,34 +61,36 @@ const Header = ({
         <NavigationMenuItem>
           <NavigationMenuLink
             className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-            onClick={() => onNavigate("/")}
+            onClick={() => handleNavigation("/home")}
           >
             <Home className="mr-2 h-4 w-4" />
             Home
           </NavigationMenuLink>
         </NavigationMenuItem>
+        {currentUser.role === 'head-marshall' && (
+          <NavigationMenuItem>
+            <NavigationMenuLink
+              className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+              onClick={() => handleNavigation("/tournament/new/setup")}
+            >
+              <Trophy className="mr-2 h-4 w-4" />
+              New Tournament
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        )}
         <NavigationMenuItem>
           <NavigationMenuLink
             className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-            onClick={() => onNavigate("/current-tournament")}
-          >
-            <Trophy className="mr-2 h-4 w-4" />
-            Current Tournament
-          </NavigationMenuLink>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuLink
-            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-            onClick={() => onNavigate("/history")}
+            onClick={() => handleNavigation("/tournament-history")}
           >
             <History className="mr-2 h-4 w-4" />
-            History
+            Tournament History
           </NavigationMenuLink>
         </NavigationMenuItem>
         <NavigationMenuItem>
           <NavigationMenuLink
             className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-            onClick={onLogout}
+            onClick={handleLogout}
           >
             <LogOut className="mr-2 h-4 w-4" />
             Logout
@@ -101,7 +103,7 @@ const Header = ({
   const renderMobileNavigation = () => {
     if (!currentUser) {
       return (
-        <DropdownMenuItem onClick={() => onNavigate("/login")}>
+        <DropdownMenuItem onClick={() => handleNavigation("/login")}>
           <LogIn className="mr-2 h-4 w-4" />
           Login
         </DropdownMenuItem>
@@ -110,19 +112,21 @@ const Header = ({
 
     return (
       <>
-        <DropdownMenuItem onClick={() => onNavigate("/")}>
+        <DropdownMenuItem onClick={() => handleNavigation("/home")}>
           <Home className="mr-2 h-4 w-4" />
           Home
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onNavigate("/current-tournament")}>
-          <Trophy className="mr-2 h-4 w-4" />
-          Current Tournament
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onNavigate("/history")}>
+        {currentUser.role === 'head-marshall' && (
+          <DropdownMenuItem onClick={() => handleNavigation("/tournament/new/setup")}>
+            <Trophy className="mr-2 h-4 w-4" />
+            New Tournament
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={() => handleNavigation("/tournament-history")}>
           <History className="mr-2 h-4 w-4" />
-          History
+          Tournament History
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={onLogout}>
+        <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           Logout
         </DropdownMenuItem>
@@ -133,16 +137,16 @@ const Header = ({
   return (
     <header className="w-full h-20 bg-primary text-primary-foreground shadow-md flex items-center justify-between px-4 md:px-8">
       <div className="flex items-center gap-2">
-        <h1 className="text-xl md:text-2xl font-bold">{title}</h1>
-        {userRole && (
-          <span className="bg-primary-foreground/20 text-primary-foreground text-xs px-2 py-1 rounded-full">
-            {userRole === "head-marshall" ? "Head Marshall" : "Marshall"}
-          </span>
-        )}
-        {username && (
-          <span className="bg-primary-foreground/10 text-primary-foreground text-xs px-2 py-1 rounded-full ml-2">
-            {username}
-          </span>
+        <h1 className="text-xl md:text-2xl font-bold">Ultimate Scorekeeper</h1>
+        {currentUser && (
+          <>
+            <span className="bg-primary-foreground/20 text-primary-foreground text-xs px-2 py-1 rounded-full">
+              {currentUser.role === "head-marshall" ? "Head Marshall" : "Marshall"}
+            </span>
+            <span className="bg-primary-foreground/10 text-primary-foreground text-xs px-2 py-1 rounded-full ml-2">
+              {currentUser.displayName || currentUser.email}
+            </span>
+          </>
         )}
       </div>
 

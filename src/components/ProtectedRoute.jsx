@@ -1,23 +1,22 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
- * @param {{
- *   children: React.ReactNode,
- *   requiredRoles?: string[],
- *   redirectPath?: string,
- *   fallbackComponent?: React.ReactNode
- * }} props
+ * ProtectedRoute component that handles authentication and role-based access control
+ * @param {Object} props
+ * @param {React.ReactNode} props.children - The component to render if authenticated
+ * @param {string} [props.requiredRole] - The role required to access the route
+ * @param {string[]} [props.allowedRoles] - Array of roles allowed to access the route
+ * @param {string} [props.redirectPath="/"] - Where to redirect if not authenticated
  */
-export default function ProtectedRoute({ 
-  children, 
-  requiredRoles = [], 
-  redirectPath = '/login',
-  fallbackComponent = null 
-}) {
-  const { currentUser, loading } = useAuth();
-  const location = useLocation();
+const ProtectedRoute = ({
+  children,
+  requiredRole,
+  allowedRoles,
+  redirectPath = "/",
+}) => {
+  const { currentUser, loading, userRole } = useAuth();
 
   // Show loading state
   if (loading) {
@@ -32,24 +31,26 @@ export default function ProtectedRoute({
 
   // Check if user is authenticated
   if (!currentUser) {
-    // Save the attempted URL for redirecting back after login
-    return <Navigate to={redirectPath} state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  // If no roles are required, allow access
-  if (requiredRoles.length === 0) {
+  // If no role requirements, allow access
+  if (!requiredRole && !allowedRoles) {
     return children;
   }
 
-  // Get user role from custom claims or user data
-  const userRole = currentUser.role || 'user';
+  // Check if user has the required role
+  if (requiredRole && userRole !== requiredRole) {
+    return <Navigate to="/" replace />;
+  }
 
-  // Check if user has required role
-  if (!requiredRoles.includes(userRole)) {
-    // Show fallback component or redirect to home
-    return fallbackComponent || <Navigate to="/" replace />;
+  // Check if user's role is in the allowed roles
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    return <Navigate to="/" replace />;
   }
 
   // User is authenticated and has required role
   return children;
-} 
+};
+
+export default ProtectedRoute; 
