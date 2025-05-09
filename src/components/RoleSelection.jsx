@@ -8,7 +8,7 @@ const RoleSelection = () => {
   const navigate = useNavigate();
 
   const handleRoleSelect = (role) => {
-    localStorage.setItem('userRole', role);
+    localStorage.setItem('selectedRole', role);
     navigate('/login', { state: { role } });
   };
 

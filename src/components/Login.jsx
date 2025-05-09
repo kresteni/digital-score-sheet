@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -15,7 +15,14 @@ const Login = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const userRole = location.state?.role || "marshall"; // Default to marshall if no role is provided
+  const [userRole, setUserRole] = useState(location.state?.role || localStorage.getItem('selectedRole') || "marshall");
+
+  useEffect(() => {
+    if (location.state?.role) {
+      setUserRole(location.state.role);
+      localStorage.setItem('selectedRole', location.state.role);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +51,7 @@ const Login = () => {
         }
 
         // All good, login success
+        localStorage.removeItem('selectedRole');
         navigate("/");
       } else {
         setError("No user data found. Please contact support.");
