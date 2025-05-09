@@ -92,7 +92,7 @@ function AppContent() {
 
   return (
     <>
-      <Header
+      <Header 
         onNavigate={navigate}
         username={currentUser?.displayName || currentUser?.email}
         userRole={currentUser?.role}
@@ -100,7 +100,7 @@ function AppContent() {
       />
       <main className="container mx-auto px-4 py-8">
         <Routes>
-          <Route path="/home" element={<Home />} />
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/role-selection" element={<RoleSelection />} />

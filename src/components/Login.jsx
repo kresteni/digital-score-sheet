@@ -10,12 +10,12 @@ import { doc, getDoc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const Login = () => {
+  const location = useLocation();
+  const [userRole, setUserRole] = useState(location.state?.role || localStorage.getItem('selectedRole') || "marshall");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const location = useLocation();
-  const [userRole, setUserRole] = useState(location.state?.role || localStorage.getItem('selectedRole') || "marshall");
 
   useEffect(() => {
     if (location.state?.role) {
@@ -51,7 +51,6 @@ const Login = () => {
         }
 
         // All good, login success
-        localStorage.removeItem('selectedRole');
         navigate("/");
       } else {
         setError("No user data found. Please contact support.");
@@ -116,7 +115,7 @@ const Login = () => {
             <div className="flex justify-center items-center gap-2 mt-4">
               <span>Don't have an account?</span>
               <button
-                onClick={() => navigate("/signup", { state: { role: userRole } })}
+                onClick={() => navigate("/signup")}
                 className="text-primary hover:underline font-medium"
                 type="button"
               >

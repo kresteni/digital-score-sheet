@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import Header from "./Header";
 import GameSetup from "./GameSetup";
 import GameScreen from "./GameScreen";
 import GameSummary from "./GameSummary";
@@ -53,6 +54,7 @@ const Home = () => {
             setUserRole(userData.role);
             setUsername(userData.displayName || user.email);
             setIsLoggedIn(true);
+            
             // After successful login, check if there's a current tournament
             checkCurrentTournament();
             fetchGameHistory();
@@ -69,6 +71,7 @@ const Home = () => {
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, [navigate]);
 
@@ -82,7 +85,9 @@ const Home = () => {
         orderBy("createdAt", "desc"),
         limit(1)
       );
+      
       const querySnapshot = await getDocs(q);
+      
       if (!querySnapshot.empty) {
         const tournamentData = querySnapshot.docs[0].data();
         setCurrentTournament({
@@ -107,12 +112,14 @@ const Home = () => {
         where("isFinished", "==", true),
         orderBy("createdAt", "desc")
       );
+      
       const querySnapshot = await getDocs(q);
       const tournaments = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         date: doc.data().endDate || doc.data().startDate
       }));
+      
       setTournamentHistory(tournaments);
     } catch (error) {
       console.error("Error fetching tournament history:", error);
@@ -124,12 +131,14 @@ const Home = () => {
     try {
       const gamesRef = collection(db, "games");
       const q = query(gamesRef, orderBy("createdAt", "desc"), limit(10));
+      
       const querySnapshot = await getDocs(q);
       const games = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
       }));
+      
       setGameHistory(games);
     } catch (error) {
       console.error("Error fetching game history:", error);
@@ -173,6 +182,7 @@ const Home = () => {
       },
       tournamentId: currentTournament?.id,
     };
+
     setGameData(preparedGameData);
     navigate("/game/play");
   };
@@ -200,6 +210,7 @@ const Home = () => {
       const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
       if (tournamentDoc.exists()) {
         const tournamentData = tournamentDoc.data();
+        
         const gamesRef = collection(db, "games");
         const q = query(gamesRef, where("tournamentId", "==", tournamentId));
         const gamesSnapshot = await getDocs(q);
@@ -208,6 +219,7 @@ const Home = () => {
           ...doc.data(),
           date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
         }));
+        
         setGameHistory(games);
         navigate("/game/history");
       }
@@ -270,9 +282,11 @@ const Home = () => {
     if (!isLoggedIn) {
       return <Navigate to="/role-selection" replace />;
     }
+
     if (!userRole) {
       return <Navigate to="/role-selection" replace />;
     }
+
     return null; // Let the Routes handle the content
   };
 
@@ -282,10 +296,17 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header
+        onNavigate={handleNavigate}
+        userRole={isLoggedIn ? userRole : null}
+        username={isLoggedIn ? username : ""}
+        onLogout={handleLogout}
+      />
       <main className="container mx-auto py-6">
         {renderContent()}
+        
         <Routes>
-          <Route path="/initial-menu" element={<InitialMenu
+          <Route path="/" element={<InitialMenu
             onNewTournament={handleNewTournament}
             onCurrentTournament={handleCurrentTournament}
             onTournamentHistory={handleTournamentHistory}
@@ -388,6 +409,7 @@ const Home = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
       {/* No Current Tournament Dialog */}
       <Dialog
         open={showNoTournamentDialog}
