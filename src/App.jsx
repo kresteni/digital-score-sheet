@@ -137,7 +137,7 @@ const AppContent = () => {
         <Route
           path="/tournament/:tournamentId/menu"
           element={
-            <ProtectedRoute requiredRole="head-marshall">
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
               <TournamentMenu />
             </ProtectedRoute>
           }

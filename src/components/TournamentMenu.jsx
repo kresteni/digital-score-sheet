@@ -27,6 +27,7 @@ const TournamentMenu = () => {
     const fetchTournament = async () => {
       try {
         const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
+        console.log("Fetched tournamentDoc:", tournamentDoc.exists(), tournamentDoc.data());
         if (tournamentDoc.exists()) {
           setTournament({ id: tournamentDoc.id, ...tournamentDoc.data() });
         }

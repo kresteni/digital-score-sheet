@@ -26,16 +26,37 @@ const InitialMenu = () => {
 
   const handleCurrentTournament = async () => {
     try {
-      // Query for active tournaments
+      // Query for active tournaments using both isFinished: false and status: 'active'
       const tournamentsRef = collection(db, "tournaments");
-      const q = query(tournamentsRef, where("status", "==", "active"));
-      const querySnapshot = await getDocs(q);
+      const q1 = query(tournamentsRef, where("isFinished", "==", false));
+      const q2 = query(tournamentsRef, where("status", "==", "active"));
+      const [snapshot1, snapshot2] = await Promise.all([getDocs(q1), getDocs(q2)]);
 
-      if (querySnapshot.empty) {
+      // Merge results, avoiding duplicates
+      const tournamentsMap = new Map();
+      snapshot1.forEach(doc => tournamentsMap.set(doc.id, doc.data()));
+      snapshot2.forEach(doc => tournamentsMap.set(doc.id, doc.data()));
+      const tournaments = Array.from(tournamentsMap.entries()).map(([id, data]) => ({ id, ...data }));
+
+      console.log("Found tournaments:", tournaments);
+
+      // Filter for actually active tournaments
+      const activeTournaments = tournaments.filter(
+        t => t.isFinished === false || t.status === "active"
+      );
+
+      // Sort by createdAt or startDate (descending)
+      activeTournaments.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.startDate || 0);
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.startDate || 0);
+        return bDate - aDate;
+      });
+
+      if (activeTournaments.length === 0) {
         setShowNoTournamentDialog(true);
       } else {
-        // Get the first active tournament
-        const tournament = querySnapshot.docs[0];
+        const tournament = activeTournaments[0];
+        console.log("Navigating to tournament:", tournament.id, tournament);
         navigate(`/tournament/${tournament.id}/menu`);
       }
     } catch (error) {
@@ -79,9 +100,15 @@ const InitialMenu = () => {
                   <span>New Tournament</span>
                 </Button>
 
-                {/* Current Tournament Button */}
+                {/* Current Tournament Button - always enabled for both roles */}
                 <Button
-                  onClick={handleCurrentTournament}
+                  onClick={() => {
+                    try {
+                      handleCurrentTournament();
+                    } catch (err) {
+                      console.error("Error in Current Tournament button click:", err);
+                    }
+                  }}
                   variant="secondary"
                   className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-secondary hover:bg-secondary/90 transition-all"
                 >

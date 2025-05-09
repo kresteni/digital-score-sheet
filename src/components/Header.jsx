@@ -7,6 +7,7 @@ import {
   Settings as SettingsIcon,
   LogOut,
   LogIn,
+  Disc3,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -23,6 +24,8 @@ import {
 } from "./ui/dropdown-menu";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { db } from "../firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 const Header = () => {
   const { currentUser, logout } = useAuth();
@@ -30,6 +33,49 @@ const Header = () => {
 
   const handleNavigation = (path) => {
     navigate(path);
+  };
+
+  // Handler for Current Tournament
+  const handleCurrentTournament = async () => {
+    try {
+      // Query for active tournaments using both isFinished: false and status: 'active'
+      const tournamentsRef = collection(db, "tournaments");
+      const q1 = query(tournamentsRef, where("isFinished", "==", false));
+      const q2 = query(tournamentsRef, where("status", "==", "active"));
+      const [snapshot1, snapshot2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+
+      // Merge results, avoiding duplicates
+      const tournamentsMap = new Map();
+      snapshot1.forEach(doc => tournamentsMap.set(doc.id, doc.data()));
+      snapshot2.forEach(doc => tournamentsMap.set(doc.id, doc.data()));
+      const tournaments = Array.from(tournamentsMap.entries()).map(([id, data]) => ({ id, ...data }));
+
+      console.log("Found tournaments:", tournaments);
+
+      // Filter for actually active tournaments
+      const activeTournaments = tournaments.filter(
+        t => t.isFinished === false || t.status === "active"
+      );
+
+      // Sort by createdAt or startDate (descending)
+      activeTournaments.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.startDate || 0);
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.startDate || 0);
+        return bDate - aDate;
+      });
+
+      if (activeTournaments.length === 0) {
+        alert("No active tournament found.");
+      } else {
+        // Both roles go to menu
+        const tournament = activeTournaments[0];
+        console.log("Navigating to tournament:", tournament.id, tournament);
+        navigate(`/tournament/${tournament.id}/menu`);
+      }
+    } catch (error) {
+      console.error("Error checking current tournament:", error);
+      alert("Error checking current tournament.");
+    }
   };
 
   const handleLogout = async () => {
@@ -67,6 +113,18 @@ const Header = () => {
             Home
           </NavigationMenuLink>
         </NavigationMenuItem>
+        {/* Current Tournament for both roles */}
+        {(currentUser.role === 'head-marshall' || currentUser.role === 'marshall') && (
+          <NavigationMenuItem>
+            <NavigationMenuLink
+              className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+              onClick={handleCurrentTournament}
+            >
+              <Disc3 className="mr-2 h-4 w-4" />
+              Current Tournament
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        )}
         {currentUser.role === 'head-marshall' && (
           <NavigationMenuItem>
             <NavigationMenuLink
@@ -116,6 +174,13 @@ const Header = () => {
           <Home className="mr-2 h-4 w-4" />
           Home
         </DropdownMenuItem>
+        {/* Current Tournament for both roles */}
+        {(currentUser.role === 'head-marshall' || currentUser.role === 'marshall') && (
+          <DropdownMenuItem onClick={handleCurrentTournament}>
+            <Disc3 className="mr-2 h-4 w-4" />
+            Current Tournament
+          </DropdownMenuItem>
+        )}
         {currentUser.role === 'head-marshall' && (
           <DropdownMenuItem onClick={() => handleNavigation("/tournament/new/setup")}>
             <Trophy className="mr-2 h-4 w-4" />
