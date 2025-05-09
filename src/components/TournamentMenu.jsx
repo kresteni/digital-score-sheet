@@ -96,7 +96,7 @@ const TournamentMenu = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
             {/* Play Game Button */}
             <Button
-              onClick={() => navigate(`/tournament/${tournamentId}/game/play`)}
+              onClick={() => navigate(`/tournament/${tournamentId}/playgame`)}
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-primary hover:bg-primary/90 transition-all"
             >
               <Disc3 size={48} />
@@ -124,18 +124,28 @@ const TournamentMenu = () => {
             </Button>
 
             {/* Marshall Assignments Button - Head Marshall Only */}
-            <Button
-              onClick={() => navigate(`/tournament/${tournamentId}/marshalls`)}
-              variant="outline"
-              className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
-              disabled={!isHeadMarshall}
-            >
-              <Users
-                size={48}
-                className={!isHeadMarshall ? "text-gray-400" : "text-blue-500"}
-              />
-              <span>Marshall Assignments</span>
-            </Button>
+            {isHeadMarshall && (
+              <Button
+                onClick={() => navigate(`/tournament/${tournamentId}/marshalls`)}
+                variant="outline"
+                className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
+              >
+                <Users size={48} className="text-blue-500" />
+                <span>Marshall Assignments</span>
+              </Button>
+            )}
+
+            {/* My Assignments Button - Marshall Only */}
+            {currentUser?.role === "marshall" && (
+              <Button
+                onClick={() => navigate(`/tournament/${tournamentId}/my-assignments`)}
+                variant="outline"
+                className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
+              >
+                <Users size={48} />
+                <span>My Assignments</span>
+              </Button>
+            )}
 
             {/* Awards Button */}
             <Button
@@ -161,16 +171,14 @@ const TournamentMenu = () => {
               <span>Edit Tournament</span>
             </Button>
 
-            {/* Team Management Button - Head Marshall Only */}
+            {/* Team Management Button - Accessible by both roles */}
             <Button
               onClick={() => navigate(`/tournament/${tournamentId}/teams`)}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
-              disabled={!isHeadMarshall}
             >
               <Users
                 size={48}
-                className={!isHeadMarshall ? "text-gray-400" : ""}
               />
               <span>Team Management</span>
             </Button>

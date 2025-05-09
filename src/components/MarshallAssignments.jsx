@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -30,117 +30,133 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import AssignmentSchedule from "./AssignmentSchedule";
+import { db } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  addDoc,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
 
 const MarshallAssignments = ({
-  userRole,
   onBack = () => {"TournamentMenu"},
 }) => {
-  const [marshalls, setMarshalls] = useState([
-    { id: "1", name: "Charlene Layo", assignments: 2 },
-    { id: "2", name: "Chris", assignments: 1 },
-    { id: "3", name: "Earl", assignments: 2 },
-  ]);
-
-  const [assignments, setAssignments] = useState([
-    {
-      id: "1",
-      marshallId: "1",
-      marshallName: "Charlene Layo",
-      time: "7:00-7:40",
-      pitch: "Pitch 1",
-      teams: "LA vs VA",
-      date: "2023-06-15",
-    },
-    {
-      id: "2",
-      marshallId: "1",
-      marshallName: "Charlene Layo",
-      time: "9:10-10:00",
-      pitch: "Pitch 2",
-      teams: "US vs PH",
-      date: "2023-06-15",
-    },
-    {
-      id: "3",
-      marshallId: "2",
-      marshallName: "Chris",
-      time: "10:30-11:20",
-      pitch: "Pitch 1",
-      teams: "Team A vs Team B",
-      date: "2023-06-16",
-    },
-    {
-      id: "4",
-      marshallId: "3",
-      marshallName: "Earl",
-      time: "13:00-13:50",
-      pitch: "Pitch 3",
-      teams: "Team C vs Team D",
-      date: "2023-06-16",
-    },
-    {
-      id: "5",
-      marshallId: "3",
-      marshallName: "Earl",
-      time: "15:30-16:20",
-      pitch: "Pitch 2",
-      teams: "Team E vs Team F",
-      date: "2023-06-17",
-    },
-  ]);
-
-  const [newMarshall, setNewMarshall] = useState({
-    name: "",
-  });
-
-  const [selectedMarshall, setSelectedMarshall] = useState("1");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { currentUser } = useAuth();
+  const userRole = currentUser?.role;
+  const [marshalls, setMarshalls] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [selectedMarshall, setSelectedMarshall] = useState(null);
   const [activeTab, setActiveTab] = useState("manage");
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [assigningMarshall, setAssigningMarshall] = useState(null);
+  const [newAssignment, setNewAssignment] = useState({
+    time: '',
+    pitch: '',
+    teams: '',
+    date: '',
+  });
+  const [matches, setMatches] = useState([]);
+  const [selectedMatchId, setSelectedMatchId] = useState('');
 
-  const handleAddMarshall = () => {
-    if (!newMarshall.name) return;
-
-    const marshall = {
-      id: Date.now().toString(),
-      name: newMarshall.name,
-      assignments: 0,
+  // Fetch marshalls from Firestore
+  useEffect(() => {
+    const fetchMarshalls = async () => {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("role", "in", ["marshall", "head-marshall"]));
+      const snapshot = await getDocs(q);
+      const marshallsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMarshalls(marshallsData);
+      // Default to first marshall for head-marshall view
+      if (!selectedMarshall && marshallsData.length > 0) {
+        setSelectedMarshall(marshallsData[0].id);
+      }
     };
+    fetchMarshalls();
+  }, []);
 
-    setMarshalls([...marshalls, marshall]);
-    setNewMarshall({ name: "" });
-    setIsAddDialogOpen(false);
+  // Fetch assignments from Firestore
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      const assignmentsRef = collection(db, "assignments");
+      let q;
+      if (userRole === "marshall") {
+        // Only fetch assignments for this marshall
+        q = query(assignmentsRef, where("marshallId", "==", currentUser.uid));
+      } else {
+        // Head-marshall: fetch all assignments
+        q = assignmentsRef;
+      }
+      const snapshot = await getDocs(q);
+      const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAssignments(assignmentsData);
+    };
+    if (currentUser) fetchAssignments();
+  }, [userRole, currentUser]);
+
+  // Fetch matches for the current tournament
+  useEffect(() => {
+    // Assume tournamentId is available as a prop or from context
+    const tournamentId = currentUser?.tournamentId || null;
+    if (!tournamentId) return;
+    const fetchMatches = async () => {
+      const matchesRef = collection(db, 'matches');
+      const q = query(matchesRef, where('tournamentId', '==', tournamentId));
+      const snapshot = await getDocs(q);
+      const matchesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMatches(matchesData);
+    };
+    fetchMatches();
+  }, [currentUser]);
+
+  // When a match is selected, auto-fill assignment fields
+  useEffect(() => {
+    if (!selectedMatchId) return;
+    const match = matches.find(m => m.id === selectedMatchId);
+    if (match) {
+      setNewAssignment({
+        teams: `${match.teamA?.name || 'TBD'} vs ${match.teamB?.name || 'TBD'}`,
+        date: match.time ? match.time.split('T')[0] : '',
+        time: match.time ? match.time.split('T')[1]?.slice(0,5) : '',
+        pitch: match.pitch || '',
+        matchId: match.id,
+      });
+    }
+  }, [selectedMatchId]);
+
+  // Count assignments for each marshall
+  const marshallAssignmentCounts = marshalls.reduce((acc, marshall) => {
+    acc[marshall.id] = assignments.filter(a => a.marshallId === marshall.id).length;
+    return acc;
+  }, {});
+
+  // Assign match to marshall
+  const handleOpenAssignDialog = (marshall) => {
+    setAssigningMarshall(marshall);
+    setNewAssignment({ time: '', pitch: '', teams: '', date: '' });
+    setIsAssignDialogOpen(true);
   };
 
-  const _handleDeleteMarshall = (marshallId) => {
-    setMarshalls(marshalls.filter((marshall) => marshall.id !== marshallId));
-  };
-
-  const handleAssign = (marshallId) => {
-    setMarshalls(
-      marshalls.map((marshall) => {
-        if (marshall.id === marshallId) {
-          return {
-            ...marshall,
-            assignments: marshall.assignments + 1,
-          };
-        }
-        return marshall;
-      }),
-    );
-  };
-
-  const handleRemove = (marshallId) => {
-    setMarshalls(
-      marshalls.map((marshall) => {
-        if (marshall.id === marshallId && marshall.assignments > 0) {
-          return {
-            ...marshall,
-            assignments: marshall.assignments - 1,
-          };
-        }
-        return marshall;
-      }),
-    );
+  const handleSaveAssignment = async () => {
+    if (!assigningMarshall) return;
+    const assignment = {
+      marshallId: assigningMarshall.id,
+      marshallName: assigningMarshall.name || assigningMarshall.displayName || assigningMarshall.email,
+      ...newAssignment,
+    };
+    await addDoc(collection(db, 'assignments'), assignment);
+    setIsAssignDialogOpen(false);
+    setAssigningMarshall(null);
+    setNewAssignment({ time: '', pitch: '', teams: '', date: '' });
+    // Refresh assignments
+    const assignmentsRef = collection(db, 'assignments');
+    const snapshot = await getDocs(assignmentsRef);
+    const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setAssignments(assignmentsData);
   };
 
   const handleViewAssignments = (marshallId) => {
@@ -148,28 +164,66 @@ const MarshallAssignments = ({
     setActiveTab("assignments");
   };
 
+  // Update assignment in Firestore
+  const handleAssignmentUpdate = async (updatedAssignment) => {
+    if (!updatedAssignment.id) return;
+    const assignmentRef = doc(db, 'assignments', updatedAssignment.id);
+    await updateDoc(assignmentRef, updatedAssignment);
+    // Refresh assignments
+    const assignmentsRef = collection(db, 'assignments');
+    const snapshot = await getDocs(assignmentsRef);
+    const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setAssignments(assignmentsData);
+  };
+
+  // Delete assignment in Firestore
+  const handleAssignmentDelete = async (assignmentId) => {
+    if (!assignmentId) return;
+    const assignmentRef = doc(db, 'assignments', assignmentId);
+    await deleteDoc(assignmentRef);
+    // Refresh assignments
+    const assignmentsRef = collection(db, 'assignments');
+    const snapshot = await getDocs(assignmentsRef);
+    const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setAssignments(assignmentsData);
+  };
+
   // Only Head Marshalls can access this feature
-  if (userRole !== "head-marshall") {
+  if (userRole === "marshall") {
+    // Only show assignments assigned to this marshall
+    const marshallAssignments = assignments.filter(a => a.marshallId === currentUser.uid);
     return (
-      <Card className="w-full max-w-3xl mx-auto">
-        <CardHeader>
-          <CardTitle className="text-center text-xl">
-            Access Restricted
+      <div className="w-full max-w-4xl mx-auto p-4 bg-background">
+        <Card className="border-2 border-primary/10 shadow-lg">
+          <CardHeader className="bg-primary/20 pb-2">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-2xl font-bold">
+                My Assignments
           </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-center text-muted-foreground">
-            Only Head Marshalls can manage marshall assignments. Please contact
-            a Head Marshall for assistance.
-          </p>
-          <div className="flex justify-center mt-4">
             <Button variant="outline" onClick={onBack}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Menu
+                Back
             </Button>
           </div>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-center mb-2">
+                Assignments
+              </h2>
+              <h3 className="text-lg font-semibold text-center mb-4">
+                {currentUser.displayName || currentUser.name || currentUser.email}
+              </h3>
+              <AssignmentSchedule
+                assignments={marshallAssignments}
+                userRole={userRole}
+                onAssignmentUpdate={handleAssignmentUpdate}
+                onAssignmentDelete={handleAssignmentDelete}
+              />
+            </div>
         </CardContent>
       </Card>
+      </div>
     );
   }
 
@@ -206,41 +260,6 @@ const MarshallAssignments = ({
             <TabsContent value="manage" className="mt-0">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-semibold">Current Marshalls</h3>
-                <Dialog
-                  open={isAddDialogOpen}
-                  onOpenChange={setIsAddDialogOpen}
-                >
-                  <Button onClick={() => setIsAddDialogOpen(true)}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Add Marshall
-                  </Button>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add New Marshall</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div>
-                        <Label htmlFor="marshallName">Marshall Name</Label>
-                        <Input
-                          id="marshallName"
-                          value={newMarshall.name}
-                          onChange={(e) =>
-                            setNewMarshall({ name: e.target.value })
-                          }
-                          placeholder="Enter name"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        onClick={handleAddMarshall}
-                        disabled={!newMarshall.name}
-                      >
-                        Add Marshall
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
               </div>
 
               <Table>
@@ -268,9 +287,9 @@ const MarshallAssignments = ({
                           className="font-medium cursor-pointer hover:text-primary hover:underline"
                           onClick={() => handleViewAssignments(marshall.id)}
                         >
-                          {marshall.name}
+                          {marshall.name || marshall.displayName || marshall.email}
                         </TableCell>
-                        <TableCell>{marshall.assignments}</TableCell>
+                        <TableCell>{marshallAssignmentCounts[marshall.id] || 0}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -284,17 +303,10 @@ const MarshallAssignments = ({
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleAssign(marshall.id)}
+                              onClick={() => handleOpenAssignDialog(marshall)}
+                              title="Assign Match"
                             >
                               <Plus className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRemove(marshall.id)}
-                              disabled={marshall.assignments <= 0}
-                            >
-                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -305,13 +317,85 @@ const MarshallAssignments = ({
               </Table>
 
               <div className="mt-6 flex justify-center gap-4">
-                <Button className="bg-green-600 hover:bg-green-700">
-                  Assign/Reassign Marshalls
-                </Button>
                 <Button variant="outline" onClick={onBack}>
                   Main Menu
                 </Button>
               </div>
+
+              {/* Assign Match Dialog */}
+              <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Assign Match to {assigningMarshall?.name || assigningMarshall?.displayName || assigningMarshall?.email}</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div>
+                      <Label htmlFor="match">Match</Label>
+                      <select
+                        id="match"
+                        className="w-full border rounded p-2"
+                        value={selectedMatchId}
+                        onChange={e => setSelectedMatchId(e.target.value)}
+                      >
+                        <option value="">Select a match</option>
+                        {matches.map(match => (
+                          <option key={match.id} value={match.id}>
+                            {`${match.teamA?.name || 'TBD'} vs ${match.teamB?.name || 'TBD'} | ${match.pitch || ''} | ${match.time ? new Date(match.time).toLocaleString() : ''}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="teams">Teams</Label>
+                      <Input
+                        id="teams"
+                        value={newAssignment.teams}
+                        onChange={e => setNewAssignment({ ...newAssignment, teams: e.target.value })}
+                        placeholder="e.g. Team A vs Team B"
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="date">Date</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={newAssignment.date}
+                        onChange={e => setNewAssignment({ ...newAssignment, date: e.target.value })}
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="time">Time</Label>
+                      <Input
+                        id="time"
+                        value={newAssignment.time}
+                        onChange={e => setNewAssignment({ ...newAssignment, time: e.target.value })}
+                        placeholder="e.g. 10:00-11:00"
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="pitch">Pitch</Label>
+                      <Input
+                        id="pitch"
+                        value={newAssignment.pitch}
+                        onChange={e => setNewAssignment({ ...newAssignment, pitch: e.target.value })}
+                        placeholder="e.g. Pitch 1"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveAssignment} disabled={!selectedMatchId}>
+                      Assign
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             <TabsContent value="assignments" className="mt-0">
@@ -326,18 +410,8 @@ const MarshallAssignments = ({
                 <AssignmentSchedule
                   assignments={marshallAssignments}
                   userRole={userRole}
-                  onAssignmentUpdate={(updatedAssignment) => {
-                    setAssignments(
-                      assignments.map((a) =>
-                        a.id === updatedAssignment.id ? updatedAssignment : a,
-                      ),
-                    );
-                  }}
-                  onAssignmentDelete={(assignmentId) => {
-                    setAssignments(
-                      assignments.filter((a) => a.id !== assignmentId),
-                    );
-                  }}
+                  onAssignmentUpdate={handleAssignmentUpdate}
+                  onAssignmentDelete={handleAssignmentDelete}
                 />
               </div>
 

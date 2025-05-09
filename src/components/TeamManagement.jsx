@@ -24,6 +24,7 @@ import {
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
 
 const TeamManagement = () => {
   const navigate = useNavigate();
@@ -42,23 +43,38 @@ const TeamManagement = () => {
   });
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dialogTeamId, setDialogTeamId] = useState(null);
+  const { userRole } = useAuth();
 
   useEffect(() => {
-    const fetchTeams = async () => {
+    const fetchTeamsAndPlayers = async () => {
       try {
         const teamsCollection = collection(db, "teams");
         const q = query(teamsCollection, where("tournamentId", "==", tournamentId));
         const querySnapshot = await getDocs(q);
-        setTeams(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        const teamsData = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        // Fetch all players for this tournament
+        const playersCollection = collection(db, "players");
+        const playersSnapshot = await getDocs(playersCollection);
+        const allPlayers = playersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        // Attach players to their teams
+        const teamsWithPlayers = teamsData.map(team => ({
+          ...team,
+          players: allPlayers.filter(player => player.teamId === team.id)
+        }));
+
+        setTeams(teamsWithPlayers);
       } catch (error) {
-        console.error("Error fetching teams:", error);
+        console.error("Error fetching teams and players:", error);
       } finally {
         setLoading(false);
       }
     };
 
     if (tournamentId) {
-      fetchTeams();
+      fetchTeamsAndPlayers();
     }
   }, [tournamentId]);
 
@@ -116,32 +132,38 @@ const TeamManagement = () => {
     }
   };
 
+  // Fetch players for a team
+  const fetchPlayersForTeam = async (teamId) => {
+    const playersCollection = collection(db, "players");
+    const q = query(playersCollection, where("teamId", "==", teamId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  };
+
   const handleAddPlayer = async () => {
-    if (!selectedTeamId || !newPlayer.name || !newPlayer.number) return;
+    if (!dialogTeamId || !newPlayer.name || !newPlayer.number) return;
 
     const player = {
       name: newPlayer.name,
       number: newPlayer.number,
       position: newPlayer.position,
-      teamId: selectedTeamId,
+      teamId: dialogTeamId,
       tournamentId,
     };
 
     try {
-      const docRef = await addDoc(collection(db, "players"), player);
-
+      await addDoc(collection(db, "players"), player);
+      // Refetch players for the team from Firestore
+      const updatedPlayers = await fetchPlayersForTeam(dialogTeamId);
       setTeams(
         teams.map((team) =>
-          team.id === selectedTeamId
-            ? {
-                ...team,
-                players: [...(team.players || []), { id: docRef.id, ...player }],
-              }
+          team.id === dialogTeamId
+            ? { ...team, players: updatedPlayers }
             : team
         )
       );
-
       setNewPlayer({ name: "", number: "", position: "" });
+      setDialogTeamId(null); // Close dialog
     } catch (error) {
       console.error("Error adding player: ", error);
     }
@@ -149,16 +171,14 @@ const TeamManagement = () => {
 
   const handleDeletePlayer = async (teamId, playerId) => {
     try {
-      const playerDocRef = doc(db, "teams", teamId, "players", playerId);
+      const playerDocRef = doc(db, "players", playerId);
       await deleteDoc(playerDocRef);
-
+      // Refetch players for the team from Firestore
+      const updatedPlayers = await fetchPlayersForTeam(teamId);
       setTeams(
         teams.map((team) =>
           team.id === teamId
-            ? {
-                ...team,
-                players: team.players?.filter((player) => player.id !== playerId),
-              }
+            ? { ...team, players: updatedPlayers }
             : team
         )
       );
@@ -182,171 +202,147 @@ const TeamManagement = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-2xl font-bold">Team Management</CardTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => navigate(`/tournament/${tournamentId}/setup`)}>
-                  Back
-                </Button>
-                <Button onClick={handleComplete}>
-                  Done
-                </Button>
-              </div>
+              <Button variant="outline" onClick={() => navigate(`/tournament/${tournamentId}/setup`)}>
+                Back
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {/* Add New Team */}
-            <div className="mb-8 p-4 border rounded-lg bg-gray-50">
-              <h3 className="text-lg font-semibold mb-4">Add New Team</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="teamName">Team Name</Label>
+            {/* Add New Team - Only for head-marshall */}
+            {userRole === "head-marshall" && (
+              <div className="mb-8 p-4 border rounded-lg bg-gray-50">
+                <h3 className="text-lg font-semibold mb-4">Add New Team</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
-                    id="teamName"
+                    placeholder="Team Name"
                     value={newTeam.name}
                     onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
-                    placeholder="Team Name"
                   />
-                </div>
-                <div>
-                  <Label htmlFor="captain">Captain</Label>
                   <Input
-                    id="captain"
+                    placeholder="Captain Name"
                     value={newTeam.captain}
                     onChange={(e) => setNewTeam({ ...newTeam, captain: e.target.value })}
-                    placeholder="Captain Name"
                   />
-                </div>
-                <div>
-                  <Label htmlFor="contactEmail">Contact Email</Label>
                   <Input
-                    id="contactEmail"
-                    type="email"
+                    placeholder="Email"
                     value={newTeam.contactEmail}
                     onChange={(e) => setNewTeam({ ...newTeam, contactEmail: e.target.value })}
-                    placeholder="Email"
                   />
                 </div>
+                <Button className="mt-4" onClick={handleAddTeam} variant="secondary">
+                  <Plus className="mr-2 h-4 w-4" /> Add Team
+                </Button>
               </div>
-              <Button
-                onClick={handleAddTeam}
-                className="mt-4"
-                disabled={!newTeam.name || !newTeam.captain}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Team
-              </Button>
-            </div>
+            )}
 
-            {/* Team List */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Teams</h3>
-              {teams.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No teams added yet</p>
-              ) : (
-                <div className="space-y-6">
-                  {teams.map((team) => (
-                    <Card key={team.id} className="overflow-hidden">
-                      <div className="bg-gray-100 p-4">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            {editingTeam?.id === team.id ? (
-                              <div className="flex gap-2">
-                                <Input
-                                  value={editingTeam.name}
-                                  onChange={(e) =>
-                                    setEditingTeam({ ...editingTeam, name: e.target.value })
-                                  }
-                                  className="w-48"
-                                />
-                                <Button variant="ghost" size="sm" onClick={handleSaveTeam}>
-                                  <Save className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setEditingTeam(null)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-xl font-semibold">{team.name}</h4>
-                                <Button variant="ghost" size="sm" onClick={() => handleEditTeam(team)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteTeam(team.id)}
-                                >
+            {/* Teams List */}
+            <h3 className="text-lg font-semibold mb-2">Teams</h3>
+            <div className="space-y-6">
+              {teams.map((team) => (
+                <div key={team.id} className="bg-gray-50 border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold">{team.name}</span>
+                      {userRole === "head-marshall" && (
+                        <>
+                          <Button size="icon" variant="ghost" onClick={() => handleEditTeam(team)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDeleteTeam(team.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                    {userRole === "head-marshall" && (
+                      <Button size="sm" variant="outline" onClick={() => { setDialogTeamId(team.id); setNewPlayer({ name: "", number: "", position: "" }); }}>
+                        <Plus className="mr-1 h-4 w-4" /> Add Player
+                      </Button>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Captain: {team.captain} | Email: {team.contactEmail}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-4 py-2 text-left font-semibold">Name</th>
+                          <th className="px-4 py-2 text-left font-semibold">Number</th>
+                          <th className="px-4 py-2 text-left font-semibold">Position</th>
+                          <th className="px-4 py-2 text-left font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(team.players || []).map((player) => (
+                          <tr key={player.id} className="border-b">
+                            <td className="px-4 py-2">{player.name}</td>
+                            <td className="px-4 py-2">{player.number}</td>
+                            <td className="px-4 py-2">{player.position}</td>
+                            <td className="px-4 py-2">
+                              {userRole === "head-marshall" && (
+                                <Button size="icon" variant="ghost" onClick={() => handleDeletePlayer(team.id, player.id)}>
                                   <Trash2 className="h-4 w-4 text-red-500" />
                                 </Button>
-                              </div>
-                            )}
-                            <p className="text-sm text-gray-500">{team.captain}</p>
-                            <div className="mt-4">
-                              <h5 className="text-lg font-semibold">Players</h5>
-                              <ul className="space-y-2">
-                                {team.players?.map((player) => (
-                                  <li key={player.id} className="flex justify-between">
-                                    <span>{player.name} (#{player.number})</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeletePlayer(team.id, player.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </li>
-                                ))}
-                              </ul>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Add Player Dialog - Only for head-marshall */}
+                  {userRole === "head-marshall" && (
+                    <Dialog open={dialogTeamId === team.id} onOpenChange={(open) => { if (!open) setDialogTeamId(null); }}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Player to {team.name}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label>Player Name</Label>
+                            <Input
+                              placeholder="Player Name"
+                              value={newPlayer.name}
+                              onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="flex-1">
+                              <Label>Jersey Number</Label>
+                              <Input
+                                placeholder="#"
+                                value={newPlayer.number}
+                                onChange={(e) => setNewPlayer({ ...newPlayer, number: e.target.value })}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <Label>Position</Label>
+                              <Input
+                                placeholder="Handler/Cutter"
+                                value={newPlayer.position}
+                                onChange={(e) => setNewPlayer({ ...newPlayer, position: e.target.value })}
+                              />
                             </div>
                           </div>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" onClick={() => setSelectedTeamId(team.id)}>
-                                Add Players
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Add Players for {team.name}</DialogTitle>
-                              </DialogHeader>
-                              <div>
-                                <Label>Player Name</Label>
-                                <Input
-                                  value={newPlayer.name}
-                                  onChange={(e) =>
-                                    setNewPlayer({ ...newPlayer, name: e.target.value })
-                                  }
-                                />
-                                <Label>Player Number</Label>
-                                <Input
-                                  value={newPlayer.number}
-                                  onChange={(e) =>
-                                    setNewPlayer({ ...newPlayer, number: e.target.value })
-                                  }
-                                />
-                                <Label>Position</Label>
-                                <Input
-                                  value={newPlayer.position}
-                                  onChange={(e) =>
-                                    setNewPlayer({ ...newPlayer, position: e.target.value })
-                                  }
-                                />
-                                <Button className="mt-2" onClick={handleAddPlayer}>
-                                  Add Player
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
+                          <Button className="mt-2" onClick={handleAddPlayer}>
+                            Add Player
+                          </Button>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
+            {/* Done Button - Only for head-marshall */}
+            {userRole === "head-marshall" && (
+              <div className="flex justify-end mt-8">
+                <Button onClick={handleComplete} className="px-8">
+                  Done
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

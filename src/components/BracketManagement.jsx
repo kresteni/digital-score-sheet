@@ -46,12 +46,14 @@ import {
   doc,
   deleteDoc,
 } from "firebase/firestore";
+import { format } from "date-fns";
+import { useAuth } from "../contexts/AuthContext";
+import { useParams } from "react-router-dom";
 
 const BracketManagement = ({
-  tournamentId = "1",
   onBack = () => {},
-  userRole = null,
 }) => {
+  const { tournamentId } = useParams();
   const [teams, setTeams] = useState([]);
   const [matches, setMatches] = useState([]);
   const [currentRound, setCurrentRound] = useState("Round Robin");
@@ -60,18 +62,25 @@ const BracketManagement = ({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddMatchDialogOpen, setIsAddMatchDialogOpen] = useState(false);
   const [newMatch, setNewMatch] = useState({
-    teamA: null,
-    teamB: null,
+    teamAId: "",
+    teamAName: "",
+    teamBId: "",
+    teamBName: "",
     scoreA: null,
     scoreB: null,
     pitch: "Pitch 1",
     time: new Date().toISOString(),
+    endTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
     status: "Scheduled",
     round: currentRound,
     bracket: currentBracket,
-    marshall: "",
+    marshallId: "",
+    marshallName: "",
   });
   const [loading, setLoading] = useState(true);
+  const { currentUser, loading: authLoading } = useAuth();
+  const userRole = currentUser?.role;
+  const [marshalls, setMarshalls] = useState([]);
 
   // Get unique rounds from matches
   const rounds = Array.from(new Set(matches.map((match) => match.round)));
@@ -87,6 +96,8 @@ const BracketManagement = ({
         const teamsSnapshot = await getDocs(teamsQuery);
         const teamsData = teamsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTeams(teamsData);
+        console.log("Current tournamentId:", tournamentId);
+        console.log("Teams fetched:", teamsData);
 
         // Fetch matches
         const matchesCollection = collection(db, "matches");
@@ -146,6 +157,18 @@ const BracketManagement = ({
     fetchTeamsAndMatches();
   }, [tournamentId]);
 
+  // Fetch marshalls from Firestore
+  useEffect(() => {
+    const fetchMarshalls = async () => {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("role", "in", ["marshall", "head-marshall"]));
+      const snapshot = await getDocs(q);
+      const marshallsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMarshalls(marshallsData);
+    };
+    fetchMarshalls();
+  }, []);
+
   // Filter matches by current round and bracket
   const filteredMatches = matches.filter(
     (match) => match.round === currentRound && match.bracket === currentBracket,
@@ -166,8 +189,9 @@ const BracketManagement = ({
       // Prepare data for Firestore (store team IDs instead of objects)
       const matchData = {
         ...editingMatch,
-        teamAId: editingMatch.teamA?.id || null,
-        teamBId: editingMatch.teamB?.id || null,
+        teamAId: editingMatch.teamA?.id || editingMatch.teamAId || null,
+        teamBId: editingMatch.teamB?.id || editingMatch.teamBId || null,
+        endTime: editingMatch.endTime || new Date(new Date(editingMatch.time).getTime() + 60 * 60 * 1000).toISOString(),
         // Keep teamA and teamB objects for local state
       };
       
@@ -189,35 +213,43 @@ const BracketManagement = ({
 
   const handleAddMatch = () => {
     setNewMatch({
-      teamA: null,
-      teamB: null,
+      teamAId: "",
+      teamAName: "",
+      teamBId: "",
+      teamBName: "",
       scoreA: null,
       scoreB: null,
       pitch: "Pitch 1",
       time: new Date().toISOString(),
+      endTime: new Date(new Date().getTime() + 60 * 60 * 1000).toISOString(),
       status: "Scheduled",
       round: currentRound,
       bracket: currentBracket,
-      marshall: "",
+      marshallId: "",
+      marshallName: "",
     });
     setIsAddMatchDialogOpen(true);
   };
 
   const handleSaveNewMatch = async () => {
-    if (!newMatch.teamA || !newMatch.teamB) return;
+    if (!newMatch.teamAId || !newMatch.teamBId) return;
 
     try {
       const completeMatch = {
-        teamAId: newMatch.teamA.id,
-        teamBId: newMatch.teamB.id,
+        teamAId: newMatch.teamAId,
+        teamBId: newMatch.teamBId,
+        teamAName: newMatch.teamAName,
+        teamBName: newMatch.teamBName,
         scoreA: newMatch.scoreA || null,
         scoreB: newMatch.scoreB || null,
         pitch: newMatch.pitch || "Pitch 1",
         time: newMatch.time || new Date().toISOString(),
+        endTime: newMatch.endTime || new Date(new Date(newMatch.time).getTime() + 60 * 60 * 1000).toISOString(),
         status: newMatch.status || "Scheduled",
         round: newMatch.round || currentRound,
         bracket: newMatch.bracket || currentBracket,
-        marshall: newMatch.marshall || "",
+        marshallId: newMatch.marshallId || "",
+        marshallName: newMatch.marshallName || "",
         tournamentId: tournamentId,
       };
 
@@ -228,8 +260,8 @@ const BracketManagement = ({
       const matchWithId = {
         id: docRef.id,
         ...completeMatch,
-        teamA: newMatch.teamA,
-        teamB: newMatch.teamB,
+        teamA: teams.find(t => t.id === newMatch.teamAId),
+        teamB: teams.find(t => t.id === newMatch.teamBId),
       };
       
       setMatches([...matches, matchWithId]);
@@ -376,28 +408,40 @@ const BracketManagement = ({
     }
   };
 
+  // Add delete match handler
+  const handleDeleteMatch = async (matchId) => {
+    try {
+      await deleteDoc(doc(db, "matches", matchId));
+      // Refresh matches from Firestore
+      const matchesCollection = collection(db, "matches");
+      const matchesQuery = query(matchesCollection, where("tournamentId", "==", tournamentId));
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const matchesData = await Promise.all(
+        matchesSnapshot.docs.map(async (matchDoc) => {
+          const matchData = matchDoc.data();
+          const teamA = teams.find(team => team.id === matchData.teamAId) || null;
+          const teamB = teams.find(team => team.id === matchData.teamBId) || null;
+          return {
+            id: matchDoc.id,
+            ...matchData,
+            teamA,
+            teamB
+          };
+        })
+      );
+      setMatches(matchesData);
+    } catch (error) {
+      console.error("Error deleting match:", error);
+    }
+  };
+
   // Check if user has permission to access this section
-  const canUpdateScores =
-    userRole === "head-marshall" || userRole === "marshall";
+  const canUpdateScores = userRole === "head-marshall" || userRole === "marshall";
   if (!canUpdateScores) {
-    return (
-      <Card className="w-full max-w-3xl mx-auto">
-        <CardHeader>
-          <CardTitle className="text-center text-xl">
-            Access Restricted
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-center text-muted-foreground">
-            You don't have permission to access this section. Please contact a
-            Head Marshall for assistance.
-          </p>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
-  if (loading) {
+  if (loading || !currentUser) {
     return (
       <Card className="w-full max-w-3xl mx-auto">
         <CardHeader>
@@ -422,7 +466,7 @@ const BracketManagement = ({
             <div className="flex items-center gap-4">
               <Button variant="outline" onClick={onBack}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
+                Back to Tournament
               </Button>
               <CardTitle className="text-2xl font-bold">
                 Tournament Bracket
@@ -436,7 +480,7 @@ const BracketManagement = ({
                     Generate Next Round
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleAddMatch}>
+                <Button variant="outline" onClick={handleAddMatch} disabled={loading}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Match
                 </Button>
@@ -480,6 +524,7 @@ const BracketManagement = ({
                 <TableHead>Team B</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Pitch</TableHead>
+                <TableHead>Time</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Marshall</TableHead>
                 {userRole === "head-marshall" && <TableHead>Actions</TableHead>}
@@ -507,6 +552,11 @@ const BracketManagement = ({
                     </TableCell>
                     <TableCell>{match.pitch}</TableCell>
                     <TableCell>
+                      {match.time && match.endTime
+                        ? `${format(new Date(match.time), "hh:mm")}-${format(new Date(match.endTime), "hh:mm a")}`
+                        : "--"}
+                    </TableCell>
+                    <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
                           match.status === "Completed"
@@ -519,7 +569,7 @@ const BracketManagement = ({
                         {match.status}
                       </span>
                     </TableCell>
-                    <TableCell>{match.marshall || "Unassigned"}</TableCell>
+                    <TableCell>{match.marshallName || "Unassigned"}</TableCell>
                     {userRole === "head-marshall" && (
                       <TableCell>
                         <Button
@@ -528,6 +578,14 @@ const BracketManagement = ({
                           onClick={() => handleEditMatch(match)}
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteMatch(match.id)}
+                          title="Delete Match"
+                        >
+                          <X className="h-4 w-4 text-red-500" />
                         </Button>
                       </TableCell>
                     )}
@@ -563,13 +621,21 @@ const BracketManagement = ({
                     <SelectTrigger>
                       <SelectValue placeholder="Select Team A" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    {loading ? (
+                      <SelectContent>
+                        <SelectItem value="" disabled>Loading teams...</SelectItem>
+                      </SelectContent>
+                    ) : (
+                      <SelectContent>
+                        {teams
+                          .filter(team => team.tournamentId === tournamentId)
+                          .map((team) => (
+                            <SelectItem key={team.id} value={team.id}>
+                              {team.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    )}
                   </Select>
                 </div>
                 <div>
@@ -587,13 +653,21 @@ const BracketManagement = ({
                     <SelectTrigger>
                       <SelectValue placeholder="Select Team B" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    {loading ? (
+                      <SelectContent>
+                        <SelectItem value="" disabled>Loading teams...</SelectItem>
+                      </SelectContent>
+                    ) : (
+                      <SelectContent>
+                        {teams
+                          .filter(team => team.tournamentId === tournamentId)
+                          .map((team) => (
+                            <SelectItem key={team.id} value={team.id}>
+                              {team.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    )}
                   </Select>
                 </div>
               </div>
@@ -657,6 +731,39 @@ const BracketManagement = ({
               </div>
 
               <div>
+                <Label htmlFor="time">Time</Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={editingMatch.time ? format(new Date(editingMatch.time), "HH:mm") : ""}
+                  onChange={(e) => {
+                    // Convert time input to ISO string with today's date
+                    const [hours, minutes] = e.target.value.split(":");
+                    const now = new Date();
+                    const iso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes).toISOString();
+                    setEditingMatch({ ...editingMatch, time: iso });
+                  }}
+                  step="900"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="endTime">End Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={editingMatch.endTime ? format(new Date(editingMatch.endTime), "HH:mm") : ""}
+                  onChange={(e) => {
+                    const [hours, minutes] = e.target.value.split(":");
+                    const now = new Date();
+                    const iso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes).toISOString();
+                    setEditingMatch({ ...editingMatch, endTime: iso });
+                  }}
+                  step="900"
+                />
+              </div>
+
+              <div>
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={editingMatch.status}
@@ -699,20 +806,30 @@ const BracketManagement = ({
                   </SelectContent>
                 </Select>
               </div>
-              
               <div>
                 <Label htmlFor="marshall">Marshall</Label>
-                <Input
-                  id="marshall"
-                  value={editingMatch.marshall || ""}
-                  onChange={(e) =>
+                <Select
+                  value={editingMatch.marshallId || ""}
+                  onValueChange={(value) => {
+                    const marshall = marshalls.find((m) => m.id === value) || null;
                     setEditingMatch({
                       ...editingMatch,
-                      marshall: e.target.value,
-                    })
-                  }
-                  placeholder="Assigned Marshall"
-                />
+                      marshallId: marshall?.id || "",
+                      marshallName: marshall?.name || marshall?.displayName || marshall?.email || "",
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Marshall" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {marshalls.map((marshall) => (
+                      <SelectItem key={marshall.id} value={marshall.id}>
+                        {marshall.name || marshall.displayName || marshall.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
@@ -746,12 +863,13 @@ const BracketManagement = ({
               <div>
                 <Label htmlFor="teamA">Team A</Label>
                 <Select
-                  value={newMatch.teamA?.id || ""}
+                  value={newMatch.teamAId}
                   onValueChange={(value) => {
-                    const team = teams.find((t) => t.id === value) || null;
+                    const team = teams.find((t) => t.id === value);
                     setNewMatch({
                       ...newMatch,
-                      teamA: team,
+                      teamAId: team?.id || "",
+                      teamAName: team?.name || "",
                     });
                   }}
                 >
@@ -770,12 +888,13 @@ const BracketManagement = ({
               <div>
                 <Label htmlFor="teamB">Team B</Label>
                 <Select
-                  value={newMatch.teamB?.id || ""}
+                  value={newMatch.teamBId}
                   onValueChange={(value) => {
-                    const team = teams.find((t) => t.id === value) || null;
+                    const team = teams.find((t) => t.id === value);
                     setNewMatch({
                       ...newMatch,
-                      teamB: team,
+                      teamBId: team?.id || "",
+                      teamBName: team?.name || "",
                     });
                   }}
                 >
@@ -810,6 +929,39 @@ const BracketManagement = ({
                   <SelectItem value="Pitch 3">Pitch 3</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="time">Time</Label>
+              <Input
+                id="time"
+                type="time"
+                value={newMatch.time ? format(new Date(newMatch.time), "HH:mm") : ""}
+                onChange={(e) => {
+                  // Convert time input to ISO string with today's date
+                  const [hours, minutes] = e.target.value.split(":");
+                  const now = new Date();
+                  const iso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes).toISOString();
+                  setNewMatch({ ...newMatch, time: iso });
+                }}
+                step="900"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="endTime">End Time</Label>
+              <Input
+                id="endTime"
+                type="time"
+                value={newMatch.endTime ? format(new Date(newMatch.endTime), "HH:mm") : ""}
+                onChange={(e) => {
+                  const [hours, minutes] = e.target.value.split(":");
+                  const now = new Date();
+                  const iso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes).toISOString();
+                  setNewMatch({ ...newMatch, endTime: iso });
+                }}
+                step="900"
+              />
             </div>
 
             <div>
@@ -857,17 +1009,28 @@ const BracketManagement = ({
             
             <div>
               <Label htmlFor="marshall">Marshall</Label>
-              <Input
-                id="marshall"
-                value={newMatch.marshall || ""}
-                onChange={(e) =>
+              <Select
+                value={newMatch.marshallId || ""}
+                onValueChange={(value) => {
+                  const marshall = marshalls.find((m) => m.id === value) || null;
                   setNewMatch({
                     ...newMatch,
-                    marshall: e.target.value,
-                  })
-                }
-                placeholder="Assigned Marshall"
-              />
+                    marshallId: marshall?.id || "",
+                    marshallName: marshall?.name || marshall?.displayName || marshall?.email || "",
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Marshall" />
+                </SelectTrigger>
+                <SelectContent>
+                  {marshalls.map((marshall) => (
+                    <SelectItem key={marshall.id} value={marshall.id}>
+                      {marshall.name || marshall.displayName || marshall.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

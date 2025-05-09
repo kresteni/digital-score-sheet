@@ -29,6 +29,7 @@ import ScoreTracker from "./components/ScoreTracker";
 import TournamentGames from "./components/TournamentGames";
 import TournamentHistoryList from "./components/TournamentHistoryList";
 import TournamentMenu from "./components/TournamentMenu";
+import MyAssignments from "./components/MyAssignments";
 import { useAuth } from "./contexts/AuthContext";
 import { auth } from "./firebase";
 
@@ -129,7 +130,7 @@ const AppContent = () => {
         <Route
           path="/tournament/:tournamentId/teams"
           element={
-            <ProtectedRoute requiredRole="head-marshall">
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
               <TeamManagement />
             </ProtectedRoute>
           }
@@ -145,7 +146,7 @@ const AppContent = () => {
         <Route
           path="/tournament/:tournamentId/brackets"
           element={
-            <ProtectedRoute requiredRole="head-marshall">
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
               <BracketManagement />
             </ProtectedRoute>
           }
@@ -177,6 +178,14 @@ const AppContent = () => {
           }
         />
         <Route
+          path="/tournament/:tournamentId/playgame"
+          element={
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
+              <PlayGame />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/tournament/:tournamentId/game/history"
           element={
             <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
@@ -199,6 +208,16 @@ const AppContent = () => {
           element={
             <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
               <TournamentHistoryList />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* My Assignments Route */}
+        <Route
+          path="/tournament/:tournamentId/my-assignments"
+          element={
+            <ProtectedRoute allowedRoles={["marshall"]}>
+              <MyAssignments />
             </ProtectedRoute>
           }
         />
