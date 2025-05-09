@@ -305,7 +305,7 @@ const Home = () => {
         {renderContent()}
         
         <Routes>
-          <Route path="/" element={<InitialMenu
+          <Route path="/initial-menu" element={<InitialMenu
             onNewTournament={handleNewTournament}
             onCurrentTournament={handleCurrentTournament}
             onTournamentHistory={handleTournamentHistory}
