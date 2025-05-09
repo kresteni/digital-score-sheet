@@ -12,21 +12,15 @@ import {
 } from "./ui/dialog";
 import { db } from "../firebase";
 import { doc, updateDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 
 const TournamentMenu = ({
-  onPlayGame = () => {},
-  onViewGameHistory = () => {},
-  onBracketManagement = () => {},
-  onMarshallAssignments = () => {},
-  onAwardsCalculation = () => {},
-  onTournamentSetup = () => {},
-  onTeamManagement = () => {},
-  onFinishTournament = () => {},
   userRole = null,
   tournamentName = "Current Tournament",
   currentTournament = null,
 }) => {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const navigate = useNavigate();
 
   const handleFinishTournament = async () => {
     setShowFinishDialog(false);
@@ -45,7 +39,7 @@ const TournamentMenu = ({
       }
     }
     
-    onFinishTournament();
+    navigate("/");
   };
 
   return (
@@ -61,7 +55,7 @@ const TournamentMenu = ({
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
             {/* Play Game Button */}
             <Button
-              onClick={onPlayGame}
+              onClick={() => navigate("/game/play")}
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-primary hover:bg-primary/90 transition-all"
             >
               <Disc3 size={48} />
@@ -70,7 +64,7 @@ const TournamentMenu = ({
 
             {/* Game History Button */}
             <Button
-              onClick={onViewGameHistory}
+              onClick={() => navigate("/game/history")}
               variant="secondary"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-secondary hover:bg-secondary/90 transition-all"
             >
@@ -80,7 +74,7 @@ const TournamentMenu = ({
 
             {/* Bracket Management Button */}
             <Button
-              onClick={onBracketManagement}
+              onClick={() => navigate("/tournament/brackets")}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
             >
@@ -90,7 +84,7 @@ const TournamentMenu = ({
 
             {/* Marshall Assignments Button - Head Marshall Only */}
             <Button
-              onClick={onMarshallAssignments}
+              onClick={() => navigate("/tournament/marshalls")}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
               disabled={userRole !== "head-marshall"}
@@ -108,7 +102,7 @@ const TournamentMenu = ({
 
             {/* Awards Button */}
             <Button
-              onClick={onAwardsCalculation}
+              onClick={() => navigate("/tournament/awards")}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
             >
@@ -118,7 +112,7 @@ const TournamentMenu = ({
 
             {/* Tournament Setup Button - Head Marshall Only */}
             <Button
-              onClick={onTournamentSetup}
+              onClick={() => navigate("/tournament/setup")}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
               disabled={userRole !== "head-marshall"}
@@ -132,7 +126,7 @@ const TournamentMenu = ({
 
             {/* Team Management Button - Head Marshall Only */}
             <Button
-              onClick={onTeamManagement}
+              onClick={() => navigate("/tournament/teams")}
               variant="outline"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
               disabled={userRole !== "head-marshall"}

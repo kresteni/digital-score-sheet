@@ -6,6 +6,7 @@ import {
   Trophy,
   Settings as SettingsIcon,
   LogOut,
+  LogIn,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -20,6 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
+import { useAuth } from "../contexts/AuthContext";
 
 /**
  * @param {{
@@ -37,6 +39,97 @@ const Header = ({
   username = "",
   onLogout = () => {},
 }) => {
+  const { currentUser } = useAuth();
+
+  const renderNavigation = () => {
+    if (!currentUser) {
+      return (
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+            onClick={() => onNavigate("/login")}
+          >
+            <LogIn className="mr-2 h-4 w-4" />
+            Login
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+      );
+    }
+
+    return (
+      <>
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+            onClick={() => onNavigate("/")}
+          >
+            <Home className="mr-2 h-4 w-4" />
+            Home
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+            onClick={() => onNavigate("/current-tournament")}
+          >
+            <Trophy className="mr-2 h-4 w-4" />
+            Current Tournament
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+            onClick={() => onNavigate("/history")}
+          >
+            <History className="mr-2 h-4 w-4" />
+            History
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+            onClick={onLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+      </>
+    );
+  };
+
+  const renderMobileNavigation = () => {
+    if (!currentUser) {
+      return (
+        <DropdownMenuItem onClick={() => onNavigate("/login")}>
+          <LogIn className="mr-2 h-4 w-4" />
+          Login
+        </DropdownMenuItem>
+      );
+    }
+
+    return (
+      <>
+        <DropdownMenuItem onClick={() => onNavigate("/")}>
+          <Home className="mr-2 h-4 w-4" />
+          Home
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onNavigate("/current-tournament")}>
+          <Trophy className="mr-2 h-4 w-4" />
+          Current Tournament
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onNavigate("/history")}>
+          <History className="mr-2 h-4 w-4" />
+          History
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Logout
+        </DropdownMenuItem>
+      </>
+    );
+  };
+
   return (
     <header className="w-full h-20 bg-primary text-primary-foreground shadow-md flex items-center justify-between px-4 md:px-8">
       <div className="flex items-center gap-2">
@@ -57,44 +150,7 @@ const Header = ({
       <div className="hidden md:block">
         <NavigationMenu>
           <NavigationMenuList>
-            <NavigationMenuItem>
-              <NavigationMenuLink
-                className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-                onClick={() => onNavigate("/")}
-              >
-                <Home className="mr-2 h-4 w-4" />
-                Home
-              </NavigationMenuLink>
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-              <NavigationMenuLink
-                className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-                onClick={() => onNavigate("/current-tournament")}
-              >
-                <Trophy className="mr-2 h-4 w-4" />
-                Current Tournament
-              </NavigationMenuLink>
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-              <NavigationMenuLink
-                className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-                onClick={() => onNavigate("/history")}
-              >
-                <History className="mr-2 h-4 w-4" />
-                History
-              </NavigationMenuLink>
-            </NavigationMenuItem>
-            {username && (
-              <NavigationMenuItem>
-                <NavigationMenuLink
-                  className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-                  onClick={onLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-            )}
+            {renderNavigation()}
           </NavigationMenuList>
         </NavigationMenu>
       </div>
@@ -112,24 +168,7 @@ const Header = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onNavigate("/")}>
-              <Home className="mr-2 h-4 w-4" />
-              Home
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onNavigate("/current-tournament")}>
-              <Trophy className="mr-2 h-4 w-4" />
-              Current Tournament
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onNavigate("/history")}>
-              <History className="mr-2 h-4 w-4" />
-              History
-            </DropdownMenuItem>
-            {username && (
-              <DropdownMenuItem onClick={onLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            )}
+            {renderMobileNavigation()}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

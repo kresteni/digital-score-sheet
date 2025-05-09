@@ -13,15 +13,17 @@ import {
 } from "./ui/select";
 import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // 🛠 use `doc`, not `addDoc`
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 
-const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
-  const [email, setEmail] = useState(""); // 🆕 New state for email
+const SignUp = () => {
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("marshall");
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,15 +38,14 @@ const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
 
       await setDoc(doc(db, "users", user.uid), {
         userId: user.uid,
-        email, // 🆕 Store the email
+        email,
         username,
         name,
         role,
         createdAt: serverTimestamp(),
       });
 
-      onSignUp(email, password, name, role);
-      if (onNavigateToInitialMenu) onNavigateToInitialMenu();
+      navigate("/");
     } catch (err) {
       console.error("Error signing up:", err.code, err.message);
       setError(`Error: ${err.message}`);
@@ -59,8 +60,6 @@ const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* 🆕 Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -127,7 +126,7 @@ const SignUp = ({ onSignUp, onBack, onNavigateToInitialMenu }) => {
                 type="button"
                 variant="outline"
                 className="flex items-center gap-2"
-                onClick={onBack}
+                onClick={() => navigate("/role-selection")}
               >
                 <ArrowLeft size={16} />
                 Back

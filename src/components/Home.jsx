@@ -27,9 +27,9 @@ import { Button } from "./ui/button";
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "../firebase";
 import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from "firebase/firestore";
+import { useNavigate, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 const Home = () => {
-  const [currentView, setCurrentView] = useState("role-selection");
   const [userRole, setUserRole] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
@@ -39,6 +39,9 @@ const Home = () => {
   const [tournamentHistory, setTournamentHistory] = useState([]);
   const [gameHistory, setGameHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [currentView, setCurrentView] = useState("initial-menu");
 
   // Check authentication state and load user data
   useEffect(() => {
@@ -56,9 +59,6 @@ const Home = () => {
             checkCurrentTournament();
             fetchGameHistory();
             fetchTournamentHistory();
-            
-            // Set the view to initial menu if already logged in
-            setCurrentView("initial-menu");
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -67,13 +67,13 @@ const Home = () => {
         setIsLoggedIn(false);
         setUserRole(null);
         setUsername("");
-        setCurrentView("role-selection");
+        navigate("/role-selection");
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [navigate]);
 
   // Fetch current active tournament
   const checkCurrentTournament = async () => {
@@ -145,70 +145,19 @@ const Home = () => {
     }
   };
 
-  const handleNavigate = (route) => {
-    // If not logged in, force authentication flow
-    if (!isLoggedIn) {
-      setCurrentView("role-selection");
-      return;
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setIsLoggedIn(false);
+      setUsername("");
+      setUserRole(null);
+      navigate("/role-selection");
+    } catch (error) {
+      console.error("Error signing out:", error);
     }
-
-    switch (route) {
-      case "/":
-        setCurrentView("initial-menu");
-        break;
-      case "/current-tournament":
-        if (currentTournament) {
-          setCurrentView("tournament-menu");
-        } else {
-          setShowNoTournamentDialog(true);
-        }
-        break;
-      case "/history":
-        setCurrentView("tournament-history");
-        break;
-      default:
-        setCurrentView("initial-menu");
-    }
-  };
-
-  const handleRoleSelect = (role) => {
-    setUserRole(role);
-    setCurrentView("login");
-  };
-
-  const handleLogin = async (username, password) => {
-    // Authentication is handled by Firebase Auth in the Login component
-    // This function is called after successful authentication
-    setIsLoggedIn(true);
-    setUsername(username);
-    
-    // Fetch current tournament after login
-    await checkCurrentTournament();
-    await fetchGameHistory();
-    await fetchTournamentHistory();
-    
-    setCurrentView("initial-menu");
-  };
-
-  const handleBackToRoleSelection = () => {
-    setUserRole(null);
-    setCurrentView("role-selection");
-  };
-
-  const handleLogout = () => {
-    auth.signOut();
-    setIsLoggedIn(false);
-    setUsername("");
-    setUserRole(null);
-    setCurrentView("role-selection");
-  };
-
-  const handleNewGame = () => {
-    setCurrentView("tournament-games");
   };
 
   const handleStartGame = (gameData) => {
-    // Prepare game data for the game screen
     const preparedGameData = {
       teamA: {
         name: gameData.teamA,
@@ -235,150 +184,144 @@ const Home = () => {
     };
 
     setGameData(preparedGameData);
-    setCurrentView("game");
-  };
-
-  const handleGameStart = (data) => {
-    if (data === null) {
-      setCurrentView("initial-menu");
-      return;
-    }
-    setGameData(data);
-    setCurrentView("game");
-  };
-
-  const handleEndGame = async (finalGameData) => {
-    setGameData(finalGameData);
-    setCurrentView("summary");
-
-    // Add game to history and update Firebase
-    // This will be implemented in GameScreen component
-    // Just update local state here
-    await fetchGameHistory();
-  };
-
-  const handleViewGameDetails = (gameId) => {
-    // Fetch game details by ID and set to current game
-    const fetchGameDetails = async () => {
-      try {
-        const gameDoc = await getDoc(doc(db, "games", gameId));
-        if (gameDoc.exists()) {
-          setGameData(gameDoc.data());
-          setCurrentView("summary");
-        }
-      } catch (error) {
-        console.error("Error fetching game details:", error);
-      }
-    };
-    
-    fetchGameDetails();
-  };
-
-  const handleBackToHome = () => {
-    setCurrentView("initial-menu");
-  };
-
-  const handleNewTournament = () => {
-    setCurrentView("tournament-setup");
-  };
-
-  const handleCurrentTournament = () => {
-    if (currentTournament) {
-      setCurrentView("tournament-menu");
-    } else {
-      setShowNoTournamentDialog(true);
-    }
-  };
-
-  const handleTournamentHistory = () => {
-    setCurrentView("tournament-history");
-  };
-
-  const handleViewTournamentDetails = (tournamentId) => {
-    // Fetch tournament details by ID
-    const fetchTournamentDetails = async () => {
-      try {
-        const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
-        if (tournamentDoc.exists()) {
-          // Set as current tournament temporarily for viewing
-          const tournamentData = tournamentDoc.data();
-          
-          // Fetch games for this tournament
-          const gamesRef = collection(db, "games");
-          const q = query(gamesRef, where("tournamentId", "==", tournamentId));
-          const gamesSnapshot = await getDocs(q);
-          const games = gamesSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
-          }));
-          
-          setGameHistory(games);
-          setCurrentView("history");
-        }
-      } catch (error) {
-        console.error("Error fetching tournament details:", error);
-      }
-    };
-    
-    fetchTournamentDetails();
-  };
-
-  const handleSaveTournament = async (tournamentData) => {
-    if (tournamentData === null) {
-      setCurrentView("initial-menu");
-      return;
-    }
-
-    // Save the tournament data and move to team management
-    setCurrentTournament(tournamentData);
-    setCurrentView("team-management");
-    
-    // Refresh current tournament data
-    await checkCurrentTournament();
-  };
-
-  const handleSaveTeams = () => {
-    // After team management, go to current tournament view
-    setCurrentView("tournament-menu");
+    navigate("/game/play");
   };
 
   const handleFinishTournament = async () => {
-    // Tournament is marked as finished in TournamentMenu component
-    // Just update state here
     setCurrentTournament(null);
-    
-    // Refresh tournament history
     await fetchTournamentHistory();
-    
-    // Navigate back to initial menu
-    setCurrentView("initial-menu");
+    navigate("/");
+  };
+
+  const handleViewGameDetails = async (gameId) => {
+    try {
+      const gameDoc = await getDoc(doc(db, "games", gameId));
+      if (gameDoc.exists()) {
+        setGameData(gameDoc.data());
+        navigate("/game/summary");
+      }
+    } catch (error) {
+      console.error("Error fetching game details:", error);
+    }
+  };
+
+  const handleViewTournamentDetails = async (tournamentId) => {
+    try {
+      const tournamentDoc = await getDoc(doc(db, "tournaments", tournamentId));
+      if (tournamentDoc.exists()) {
+        const tournamentData = tournamentDoc.data();
+        
+        const gamesRef = collection(db, "games");
+        const q = query(gamesRef, where("tournamentId", "==", tournamentId));
+        const gamesSnapshot = await getDocs(q);
+        const games = gamesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          date: doc.data().gameDate || doc.data().createdAt?.toDate().toISOString().split("T")[0]
+        }));
+        
+        setGameHistory(games);
+        navigate("/game/history");
+      }
+    } catch (error) {
+      console.error("Error fetching tournament details:", error);
+    }
+  };
+
+  const handleNewTournament = () => {
+    setCurrentTournament(null);
+    navigate("/tournament/new");
+  };
+
+  const handleCurrentTournament = () => {
+    navigate("/tournament/current");
+  };
+
+  const handleTournamentHistory = () => {
+    navigate("/tournament/history");
+  };
+
+  const handleNewGame = () => {
+    navigate("/game/play");
+  };
+
+  const handleEndGame = () => {
+    navigate("/game/history");
+  };
+
+  const handleBackToHome = () => {
+    navigate("/");
+  };
+
+  const handleBackToRoleSelection = () => {
+    navigate("/role-selection");
+  };
+
+  const handleSaveTournament = () => {
+    // Implementation of handleSaveTournament
+  };
+
+  const handleSaveTeams = () => {
+    // Implementation of handleSaveTeams
+  };
+
+  const handleRoleSelect = (role) => {
+    setUserRole(role);
+    navigate("/");
+  };
+
+  const handleLogin = () => {
+    // Implementation of handleLogin
+  };
+
+  const handleNavigate = (path) => {
+    navigate(path);
   };
 
   const renderContent = () => {
-    if (loading) {
-      return <div className="flex items-center justify-center h-64">Loading...</div>;
+    if (!isLoggedIn) {
+      return <Navigate to="/role-selection" replace />;
     }
-    
-    switch (currentView) {
-      case "role-selection":
-        return <RoleSelection onRoleSelect={handleRoleSelect} />;
-      case "login":
-        return (
-          <Login
+
+    if (!userRole) {
+      return <Navigate to="/role-selection" replace />;
+    }
+
+    return null; // Let the Routes handle the content
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header
+        onNavigate={handleNavigate}
+        userRole={isLoggedIn ? userRole : null}
+        username={isLoggedIn ? username : ""}
+        onLogout={handleLogout}
+      />
+      <main className="container mx-auto py-6">
+        {renderContent()}
+        
+        <Routes>
+          <Route path="/" element={<InitialMenu
+            onNewTournament={handleNewTournament}
+            onCurrentTournament={handleCurrentTournament}
+            onTournamentHistory={handleTournamentHistory}
+            userRole={userRole}
+          />} />
+          <Route path="/role-selection" element={<RoleSelection onRoleSelect={handleRoleSelect} />} />
+          <Route path="/login" element={<Login
             userRole={userRole}
             onLogin={handleLogin}
             onBack={handleBackToRoleSelection}
             onCreateAccount={() => setCurrentView("signup")}
             onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
-          />
-        );
-      case "signup":
-        return (
-          <SignUp
+          />} />
+          <Route path="/signup" element={<SignUp
             onSignUp={(username, password, name, role) => {
-              // In a real app, you would create the user account here
-              // For now, we'll just log the user in
               setUserRole(role);
               setIsLoggedIn(true);
               setUsername(username);
@@ -386,20 +329,13 @@ const Home = () => {
             }}
             onBack={() => setCurrentView("login")}
             onNavigateToInitialMenu={() => setCurrentView("initial-menu")}
-          />
-        );
-      case "initial-menu":
-        return (
-          <InitialMenu
-            onNewTournament={handleNewTournament}
-            onCurrentTournament={handleCurrentTournament}
-            onTournamentHistory={handleTournamentHistory}
+          />} />
+          <Route path="/tournament/new" element={<TournamentSetup
+            onSaveTournament={handleSaveTournament}
             userRole={userRole}
-          />
-        );
-      case "tournament-menu":
-        return (
-          <TournamentMenu
+            existingTournament={currentTournament}
+          />} />
+          <Route path="/tournament/current" element={<TournamentMenu
             onPlayGame={handleNewGame}
             onViewGameHistory={() => setCurrentView("history")}
             onBracketManagement={() => setCurrentView("bracket-management")}
@@ -411,120 +347,68 @@ const Home = () => {
             userRole={userRole}
             tournamentId={currentTournament?.id}
             tournamentName={currentTournament?.name || "Current Tournament"}
-          />
-        );
-      case "tournament-games":
-        return (
-          <TournamentGames
-            tournamentId={currentTournament?.id}
-            onBack={() => setCurrentView("tournament-menu")}
-            onStartGame={handleStartGame}
-            userRole={userRole}
-          />
-        );
-      case "tournament-history":
-        return (
-          <TournamentHistoryList
+          />} />
+          <Route path="/tournament/history" element={<TournamentHistoryList
             tournaments={tournamentHistory}
             onViewTournament={handleViewTournamentDetails}
             onBack={() => setCurrentView("initial-menu")}
-          />
-        );
-      case "home":
-        // Redirect to initial-menu instead of showing HomeMenu
-        setCurrentView("initial-menu");
-        return null;
-      case "setup":
-        return <GameSetup onGameStart={handleGameStart} userRole={userRole} />;
-      case "game":
-        if (!gameData) return <div>Loading...</div>;
-        return (
-          <GameScreen
-            teamAName={gameData.teamA.name}
-            teamBName={gameData.teamB.name}
-            teamAPlayers={gameData.teamA.players.map((p) => ({
-              ...p,
-              goals: 0,
-              assists: 0,
-            }))}
-            teamBPlayers={gameData.teamB.players.map((p) => ({
-              ...p,
-              goals: 0,
-              assists: 0,
-            }))}
-            initialGameTime={gameData.parameters.gameDuration * 60}
-            initialTimeoutTime={gameData.parameters.timeoutDuration}
-            initialHalftimeTime={gameData.parameters.halftimeDuration * 60}
-            onEndGame={handleEndGame}
-            tournamentId={currentTournament?.id}
-          />
-        );
-      case "summary":
-        if (!gameData) return <div>Loading...</div>;
-        return (
-          <GameSummary
-            teamAName={gameData.teamA?.name || gameData.teamAName}
-            teamBName={gameData.teamB?.name || gameData.teamBName}
-            teamAScore={gameData.teamAScore || 0}
-            teamBScore={gameData.teamBScore || 0}
-            teamAPlayers={gameData.teamAPlayers || []}
-            teamBPlayers={gameData.teamBPlayers || []}
-            gameDuration={`${Math.floor((gameData.parameters?.gameDuration || 90) / 60)}h ${(gameData.parameters?.gameDuration || 90) % 60}m`}
-            gameDate={
-              gameData.gameDate
-                ? new Date(gameData.gameDate).toLocaleDateString()
-                : new Date().toLocaleDateString()
-            }
-            onBackToHome={handleBackToHome}
-          />
-        );
-      case "history":
-        return (
-          <GameHistory
-            games={gameHistory}
-            onViewGameDetails={handleViewGameDetails}
-            onBack={() => setCurrentView("tournament-menu")}
-          />
-        );
-      case "tournament-setup":
-        return (
-          <TournamentSetup
+          />} />
+          <Route path="/tournament/setup" element={<TournamentSetup
             onSaveTournament={handleSaveTournament}
             userRole={userRole}
             existingTournament={currentTournament}
-          />
-        );
-      case "team-management":
-        return (
-          <TeamManagement
+          />} />
+          <Route path="/tournament/teams" element={<TeamManagement
             userRole={userRole}
             tournamentId={currentTournament?.id}
             onBack={() => setCurrentView("tournament-setup")}
             onComplete={handleSaveTeams}
-          />
-        );
-      case "bracket-management":
-        return <BracketManagement userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />;
-      case "awards-calculation":
-        return <AwardsCalculation userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />;
-      case "marshall-assignments":
-        return (
-          <MarshallAssignments userRole={userRole} tournamentId={currentTournament?.id} onBack={() => setCurrentView("tournament-menu")} />
-        );
-      default:
-        return <div>Page not found</div>;
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        onNavigate={handleNavigate}
-        userRole={isLoggedIn ? userRole : null}
-        username={isLoggedIn ? username : ""}
-        onLogout={handleLogout}
-      />
-      <main className="container mx-auto py-6">{renderContent()}</main>
+          />} />
+          <Route path="/tournament/brackets" element={<BracketManagement
+            userRole={userRole}
+            tournamentId={currentTournament?.id}
+            onBack={() => setCurrentView("tournament-menu")}
+          />} />
+          <Route path="/tournament/marshalls" element={<MarshallAssignments
+            userRole={userRole}
+            tournamentId={currentTournament?.id}
+            onBack={() => setCurrentView("tournament-menu")}
+          />} />
+          <Route path="/tournament/awards" element={<AwardsCalculation
+            userRole={userRole}
+            tournamentId={currentTournament?.id}
+            onBack={() => setCurrentView("tournament-menu")}
+          />} />
+          <Route path="/game/play" element={<GameScreen
+            teamAName={gameData?.teamA?.name}
+            teamBName={gameData?.teamB?.name}
+            teamAPlayers={gameData?.teamA?.players}
+            teamBPlayers={gameData?.teamB?.players}
+            initialGameTime={gameData?.parameters?.gameDuration * 60}
+            initialTimeoutTime={gameData?.parameters?.timeoutDuration}
+            initialHalftimeTime={gameData?.parameters?.halftimeDuration * 60}
+            onEndGame={handleEndGame}
+            tournamentId={currentTournament?.id}
+          />} />
+          <Route path="/game/history" element={<GameHistory
+            games={gameHistory}
+            onViewGameDetails={handleViewGameDetails}
+            onBack={() => setCurrentView("tournament-menu")}
+          />} />
+          <Route path="/game/summary" element={<GameSummary
+            teamAName={gameData?.teamA?.name || gameData?.teamAName}
+            teamBName={gameData?.teamB?.name || gameData?.teamBName}
+            teamAScore={gameData?.teamAScore || 0}
+            teamBScore={gameData?.teamBScore || 0}
+            teamAPlayers={gameData?.teamAPlayers || []}
+            teamBPlayers={gameData?.teamBPlayers || []}
+            gameDuration={`${Math.floor((gameData?.parameters?.gameDuration || 90) / 60)}h ${(gameData?.parameters?.gameDuration || 90) % 60}m`}
+            gameDate={gameData?.gameDate ? new Date(gameData.gameDate).toLocaleDateString() : new Date().toLocaleDateString()}
+            onBackToHome={handleBackToHome}
+          />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
 
       {/* No Current Tournament Dialog */}
       <Dialog

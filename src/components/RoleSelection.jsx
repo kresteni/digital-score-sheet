@@ -2,8 +2,16 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Shield, ShieldCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const RoleSelection = ({ onRoleSelect }) => {
+const RoleSelection = () => {
+  const navigate = useNavigate();
+
+  const handleRoleSelect = (role) => {
+    localStorage.setItem('userRole', role);
+    navigate('/login', { state: { role } });
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto p-6 bg-background">
       <Card className="w-full shadow-lg border-2 border-primary/10">
@@ -16,7 +24,7 @@ const RoleSelection = ({ onRoleSelect }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
             {/* Head Marshall Button */}
             <Button
-              onClick={() => onRoleSelect("head-marshall")}
+              onClick={() => handleRoleSelect("head-marshall")}
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-primary hover:bg-primary/90 transition-all"
             >
               <ShieldCheck size={48} />
@@ -25,7 +33,7 @@ const RoleSelection = ({ onRoleSelect }) => {
 
             {/* Marshall Button */}
             <Button
-              onClick={() => onRoleSelect("marshall")}
+              onClick={() => handleRoleSelect("marshall")}
               variant="secondary"
               className="h-40 flex flex-col items-center justify-center gap-4 text-xl bg-secondary hover:bg-secondary/90 transition-all"
             >

@@ -4,20 +4,16 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { LogIn, ArrowLeft } from "lucide-react";
-import { auth, db } from "../firebase"; // ✅ adjust path if needed
+import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 
-const Login = ({
-  userRole,
-  onLogin,
-  onBack,
-  onCreateAccount,
-  onNavigateToInitialMenu,
-}) => {
+const Login = ({ userRole }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,11 +24,11 @@ const Login = ({
     }
 
     try {
-      // 🔐 Firebase Auth login
+      // Firebase Auth login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 🔎 Retrieve role and username from Firestore
+      // Retrieve role and username from Firestore
       const docRef = doc(db, "users", user.uid);
       const docSnap = await getDoc(docRef);
 
@@ -45,11 +41,8 @@ const Login = ({
           return;
         }
 
-        // ✅ All good, login success
-        onLogin(user.email, password, userData.username, userData.role);
-        if (onNavigateToInitialMenu) {
-          onNavigateToInitialMenu();
-        }
+        // All good, login success
+        navigate("/");
       } else {
         setError("No user data found. Please contact support.");
       }
@@ -100,7 +93,7 @@ const Login = ({
                 type="button"
                 variant="outline"
                 className="flex items-center gap-2"
-                onClick={onBack}
+                onClick={() => navigate("/role-selection")}
               >
                 <ArrowLeft size={16} />
                 Back
@@ -113,7 +106,7 @@ const Login = ({
             <div className="flex justify-center items-center gap-2 mt-4">
               <span>Don't have an account?</span>
               <button
-                onClick={onCreateAccount}
+                onClick={() => navigate("/signup")}
                 className="text-primary hover:underline font-medium"
                 type="button"
               >
