@@ -295,12 +295,6 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header
-        onNavigate={handleNavigate}
-        userRole={isLoggedIn ? userRole : null}
-        username={isLoggedIn ? username : ""}
-        onLogout={handleLogout}
-      />
       <main className="container mx-auto py-6">
         {renderContent()}
         
