@@ -202,17 +202,17 @@ const TeamManagement = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-2xl font-bold">Team Management</CardTitle>
-              <Button variant="outline" onClick={() => navigate(`/tournament/${tournamentId}/setup`)}>
-                Back
-              </Button>
+                <Button variant="outline" onClick={() => navigate(`/tournament/${tournamentId}/setup`)}>
+                  Back
+                </Button>
             </div>
           </CardHeader>
           <CardContent>
             {/* Add New Team - Only for head-marshall */}
             {userRole === "head-marshall" && (
-              <div className="mb-8 p-4 border rounded-lg bg-gray-50">
-                <h3 className="text-lg font-semibold mb-4">Add New Team</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mb-8 p-4 border rounded-lg bg-gray-50">
+              <h3 className="text-lg font-semibold mb-4">Add New Team</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
                     placeholder="Team Name"
                     value={newTeam.name}
@@ -237,17 +237,17 @@ const TeamManagement = () => {
 
             {/* Teams List */}
             <h3 className="text-lg font-semibold mb-2">Teams</h3>
-            <div className="space-y-6">
-              {teams.map((team) => (
+                <div className="space-y-6">
+                  {teams.map((team) => (
                 <div key={team.id} className="bg-gray-50 border rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
                       <span className="text-xl font-bold">{team.name}</span>
                       {userRole === "head-marshall" && (
                         <>
                           <Button size="icon" variant="ghost" onClick={() => handleEditTeam(team)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
                           <Button size="icon" variant="ghost" onClick={() => handleDeleteTeam(team.id)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -284,53 +284,53 @@ const TeamManagement = () => {
                                 <Button size="icon" variant="ghost" onClick={() => handleDeletePlayer(team.id, player.id)}>
                                   <Trash2 className="h-4 w-4 text-red-500" />
                                 </Button>
-                              )}
+                            )}
                             </td>
                           </tr>
-                        ))}
+                                ))}
                       </tbody>
                     </table>
-                  </div>
+                            </div>
                   {/* Add Player Dialog - Only for head-marshall */}
                   {userRole === "head-marshall" && (
                     <Dialog open={dialogTeamId === team.id} onOpenChange={(open) => { if (!open) setDialogTeamId(null); }}>
-                      <DialogContent>
-                        <DialogHeader>
+                            <DialogContent>
+                              <DialogHeader>
                           <DialogTitle>Add Player to {team.name}</DialogTitle>
-                        </DialogHeader>
+                              </DialogHeader>
                         <div className="space-y-4">
-                          <div>
-                            <Label>Player Name</Label>
-                            <Input
+                              <div>
+                                <Label>Player Name</Label>
+                                <Input
                               placeholder="Player Name"
-                              value={newPlayer.name}
+                                  value={newPlayer.name}
                               onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
-                            />
+                                />
                           </div>
                           <div className="flex gap-4">
                             <div className="flex-1">
                               <Label>Jersey Number</Label>
-                              <Input
+                                <Input
                                 placeholder="#"
-                                value={newPlayer.number}
+                                  value={newPlayer.number}
                                 onChange={(e) => setNewPlayer({ ...newPlayer, number: e.target.value })}
-                              />
+                                />
                             </div>
                             <div className="flex-1">
-                              <Label>Position</Label>
-                              <Input
+                                <Label>Position</Label>
+                                <Input
                                 placeholder="Handler/Cutter"
-                                value={newPlayer.position}
+                                  value={newPlayer.position}
                                 onChange={(e) => setNewPlayer({ ...newPlayer, position: e.target.value })}
-                              />
+                                />
                             </div>
                           </div>
-                          <Button className="mt-2" onClick={handleAddPlayer}>
-                            Add Player
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                                <Button className="mt-2" onClick={handleAddPlayer}>
+                                  Add Player
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                   )}
                 </div>
               ))}

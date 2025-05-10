@@ -94,7 +94,7 @@ const AssignmentSchedule = ({
                     <TableHead>Time</TableHead>
                     <TableHead>Pitch</TableHead>
                     <TableHead>Teams</TableHead>
-                    <TableHead>Marshall</TableHead>
+                    <TableHead>Status</TableHead>
                     {canEdit && (
                       <TableHead className="text-right">Actions</TableHead>
                     )}
@@ -135,12 +135,11 @@ const AssignmentSchedule = ({
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={editedAssignment?.marshallName || ""}
+                              value={editedAssignment?.status || ""}
                               onChange={(e) =>
-                                handleChange("marshallName", e.target.value)
+                                handleChange("status", e.target.value)
                               }
                               className="w-full"
-                              disabled
                             />
                           </TableCell>
                           <TableCell className="text-right">
@@ -183,8 +182,18 @@ const AssignmentSchedule = ({
                               {assignment.teams}
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {assignment.marshallName}
+                          <TableCell>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs ${
+                                assignment.status === "Completed"
+                                  ? "bg-green-100 text-green-800"
+                                  : assignment.status === "In Progress"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {assignment.status}
+                            </span>
                           </TableCell>
                           {canEdit && (
                             <TableCell className="text-right">

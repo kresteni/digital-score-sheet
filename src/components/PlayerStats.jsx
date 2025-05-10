@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, User, Award, Shield } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -25,10 +25,18 @@ const PlayerStats = ({
   teamAName = "Team A",
   teamBName = "Team B",
   onAddPlayer = () => {},
-  onRecordStat = () => {},
+  onRecordStat,
+  onStatUpdate,
 }) => {
   const [activeTab, setActiveTab] = useState("teamA");
   const [newPlayerName, setNewPlayerName] = useState("");
+  const [playersA, setPlayersA] = useState(teamAPlayers);
+  const [playersB, setPlayersB] = useState(teamBPlayers);
+
+  useEffect(() => {
+    setPlayersA(teamAPlayers);
+    setPlayersB(teamBPlayers);
+  }, [teamAPlayers, teamBPlayers]);
 
   const handleAddPlayer = () => {
     if (newPlayerName.trim()) {
@@ -38,7 +46,35 @@ const PlayerStats = ({
   };
 
   const handleRecordStat = (teamId, playerId, statType) => {
-    onRecordStat(teamId, playerId, statType);
+    const statKey = statType === "block" ? "blocks" : statType + "s";
+
+    if (teamId === "A") {
+      const updatedPlayers = playersA.map((player) => {
+        if (player.id === playerId) {
+          const updatedPlayer = {
+            ...player,
+            [statKey]: (player[statKey] || 0) + 1,
+          };
+          onStatUpdate(teamId, updatedPlayer);
+          return updatedPlayer;
+        }
+        return player;
+      });
+      setPlayersA(updatedPlayers);
+    } else {
+      const updatedPlayers = playersB.map((player) => {
+        if (player.id === playerId) {
+          const updatedPlayer = {
+            ...player,
+            [statKey]: (player[statKey] || 0) + 1,
+          };
+          onStatUpdate(teamId, updatedPlayer);
+          return updatedPlayer;
+        }
+        return player;
+      });
+      setPlayersB(updatedPlayers);
+    }
   };
 
   return (
@@ -90,7 +126,7 @@ const PlayerStats = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {teamAPlayers.length === 0 ? (
+                {playersA.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={5}
@@ -100,7 +136,7 @@ const PlayerStats = ({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  teamAPlayers.map((player) => (
+                  playersA.map((player) => (
                     <TableRow key={player.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -187,7 +223,7 @@ const PlayerStats = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {teamBPlayers.length === 0 ? (
+                {playersB.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={5}
@@ -197,7 +233,7 @@ const PlayerStats = ({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  teamBPlayers.map((player) => (
+                  playersB.map((player) => (
                     <TableRow key={player.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">

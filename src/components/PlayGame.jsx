@@ -1,52 +1,64 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { fetchMatchesFromFirestore, updateMatchStatus } from "../utils/bracketGeneration";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { ArrowLeft, Clock, MapPin, Play } from "lucide-react";
+import { db } from "../firebase";
+import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
+import { useParams, useNavigate } from "react-router-dom";
 
-const PlayGame = ({ onStartGame, tournamentId }) => {
+const PlayGame = ({ onBack = () => {} }) => {
+  const { tournamentId } = useParams();
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchGames = async () => {
-      try {
-        setLoading(true);
-        if (!tournamentId) {
-          setGames([]);
-          setLoading(false);
-          return;
-        }
-        
-        const matches = await fetchMatchesFromFirestore(tournamentId);
-        setGames(matches);
-      } catch (err) {
-        console.error("Error fetching games:", err);
-        setError("Failed to load games. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGames();
-  }, [tournamentId]);
-
-  const handleStartGame = async (game) => {
+  const fetchGames = async () => {
+    setLoading(true);
     try {
-      await updateMatchStatus(game.id, "In Progress");
-      
-      // Update the local state
-      setGames(games.map(g => 
-        g.id === game.id ? { ...g, status: "In Progress" } : g
-      ));
-      
-      // Call the parent component's onStartGame function
-      if (onStartGame) {
-        onStartGame(game);
+      if (!tournamentId || !currentUser) {
+        setGames([]);
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Error starting game:", err);
-      setError("Failed to start the game. Please try again.");
+      const matchesRef = collection(db, "matches");
+      const matchesQuery = query(matchesRef, where("tournamentId", "==", tournamentId));
+      const matchesSnapshot = await getDocs(matchesQuery);
+      let matches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (currentUser.role === "marshall") {
+        matches = matches.filter(match => match.marshallId === currentUser.uid);
+      }
+      setGames(matches);
+    } catch (error) {
+      console.error("Error fetching games:", error);
+      setError("Failed to load games. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGames();
+    // eslint-disable-next-line
+  }, [tournamentId, currentUser]);
+
+  const handleStartGame = async (gameId) => {
+    const game = games.find((g) => g.id === gameId);
+    if (game) {
+      // Update status in Firestore
+      await updateDoc(doc(db, "matches", gameId), { status: "In Progress" });
+      await fetchGames();
+      navigate(`/tournament/${tournamentId}/game/setup/${gameId}`);
     }
   };
 
@@ -79,68 +91,111 @@ const PlayGame = ({ onStartGame, tournamentId }) => {
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-4">Games in Tournament</h2>
-      <table className="w-full border-collapse border border-gray-300">
-        <thead>
-          <tr>
-            <th className="border border-gray-300 p-2">Team A</th>
-            <th className="border border-gray-300 p-2">Team B</th>
-            <th className="border border-gray-300 p-2">Score</th>
-            <th className="border border-gray-300 p-2">Pitch</th>
-            <th className="border border-gray-300 p-2">Time</th>
-            <th className="border border-gray-300 p-2">Status</th>
-            <th className="border border-gray-300 p-2">Assigned Marshall</th>
-            <th className="border border-gray-300 p-2">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {games.map((game) => (
-            <tr key={game.id} className={game.status === "In Progress" ? "bg-yellow-100" : game.status === "Completed" ? "bg-green-100" : ""}>
-              <td className="border border-gray-300 p-2">{game.teamA?.name || "TBD"}</td>
-              <td className="border border-gray-300 p-2">{game.teamB?.name || "TBD"}</td>
-              <td className="border border-gray-300 p-2">
-                {game.scoreA !== null && game.scoreB !== null 
-                  ? `${game.scoreA}-${game.scoreB}` 
-                  : "0-0"}
-              </td>
-              <td className="border border-gray-300 p-2">{game.pitch}</td>
-              <td className="border border-gray-300 p-2">
-                {new Date(game.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </td>
-              <td className="border border-gray-300 p-2">{game.status}</td>
-              <td className="border border-gray-300 p-2">{game.marshallName || "Unassigned"}</td>
-              <td className="border border-gray-300 p-2">
-                {game.status === "Scheduled" && (
-                  <button
-                    onClick={() => handleStartGame(game)}
-                    className="p-2 bg-primary text-white rounded-lg"
-                    disabled={!game.teamA || !game.teamB}
-                  >
-                    Start Game
-                  </button>
-                )}
-                {game.status === "In Progress" && (
-                  <button
-                    onClick={() => onStartGame(game)}
-                    className="p-2 bg-green-500 text-white rounded-lg"
-                  >
-                    Continue Game
-                  </button>
-                )}
-                {game.status === "Completed" && (
-                  <button
-                    onClick={() => onStartGame(game)}
-                    className="p-2 bg-gray-300 text-gray-700 rounded-lg"
-                  >
-                    View Details
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="w-full max-w-6xl mx-auto p-4 bg-background">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" onClick={onBack}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+              <CardTitle className="text-2xl font-bold">
+                Tournament Games
+              </CardTitle>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Match</TableHead>
+                <TableHead>Team A</TableHead>
+                <TableHead>Team B</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Pitch</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Marshall</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {games.map((game, idx) => (
+                <TableRow key={game.id}>
+                  <TableCell className="font-medium">
+                    Match {idx + 1}
+                  </TableCell>
+                  <TableCell>{game.teamA?.name || game.teamAName || "TBD"}</TableCell>
+                  <TableCell>{game.teamB?.name || game.teamBName || "TBD"}</TableCell>
+                  <TableCell>
+                    {game.scoreA !== null && game.scoreB !== null
+                      ? `${game.scoreA} - ${game.scoreB}`
+                      : "--"}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      {game.pitch}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      {game.time ? new Date(game.time).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }) : "--"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${game.status === "Completed" ? "bg-green-100 text-green-800" : game.status === "In Progress" ? "bg-blue-100 text-blue-800" : "bg-yellow-100 text-yellow-800"}`}
+                    >
+                      {game.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>{game.marshallName || game.marshall || "Unassigned"}</TableCell>
+                  <TableCell className="text-right">
+                    {game.status === "Scheduled" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleStartGame(game.id)}
+                        disabled={!game.teamA || !game.teamB}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Game
+                      </Button>
+                    )}
+                    {game.status === "In Progress" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleStartGame(game.id)}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Continue Game
+                      </Button>
+                    )}
+                    {game.status === "Completed" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleStartGame(game.id)}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        View Details
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 };

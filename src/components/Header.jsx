@@ -115,26 +115,15 @@ const Header = () => {
         </NavigationMenuItem>
         {/* Current Tournament for both roles */}
         {(currentUser.role === 'head-marshall' || currentUser.role === 'marshall') && (
-          <NavigationMenuItem>
-            <NavigationMenuLink
-              className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
               onClick={handleCurrentTournament}
-            >
+          >
               <Disc3 className="mr-2 h-4 w-4" />
-              Current Tournament
-            </NavigationMenuLink>
-          </NavigationMenuItem>
-        )}
-        {currentUser.role === 'head-marshall' && (
-          <NavigationMenuItem>
-            <NavigationMenuLink
-              className="flex items-center px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10 rounded-md cursor-pointer"
-              onClick={() => handleNavigation("/tournament/new/setup")}
-            >
-              <Trophy className="mr-2 h-4 w-4" />
-              New Tournament
-            </NavigationMenuLink>
-          </NavigationMenuItem>
+            Current Tournament
+          </NavigationMenuLink>
+        </NavigationMenuItem>
         )}
         <NavigationMenuItem>
           <NavigationMenuLink
@@ -178,14 +167,8 @@ const Header = () => {
         {(currentUser.role === 'head-marshall' || currentUser.role === 'marshall') && (
           <DropdownMenuItem onClick={handleCurrentTournament}>
             <Disc3 className="mr-2 h-4 w-4" />
-            Current Tournament
-          </DropdownMenuItem>
-        )}
-        {currentUser.role === 'head-marshall' && (
-          <DropdownMenuItem onClick={() => handleNavigation("/tournament/new/setup")}>
-            <Trophy className="mr-2 h-4 w-4" />
-            New Tournament
-          </DropdownMenuItem>
+          Current Tournament
+        </DropdownMenuItem>
         )}
         <DropdownMenuItem onClick={() => handleNavigation("/tournament-history")}>
           <History className="mr-2 h-4 w-4" />
@@ -205,12 +188,12 @@ const Header = () => {
         <h1 className="text-xl md:text-2xl font-bold">Ultimate Scorekeeper</h1>
         {currentUser && (
           <>
-            <span className="bg-primary-foreground/20 text-primary-foreground text-xs px-2 py-1 rounded-full">
+          <span className="bg-primary-foreground/20 text-primary-foreground text-xs px-2 py-1 rounded-full">
               {currentUser.role === "head-marshall" ? "Head Marshall" : "Marshall"}
-            </span>
-            <span className="bg-primary-foreground/10 text-primary-foreground text-xs px-2 py-1 rounded-full ml-2">
+          </span>
+          <span className="bg-primary-foreground/10 text-primary-foreground text-xs px-2 py-1 rounded-full ml-2">
               {currentUser.displayName || currentUser.email}
-            </span>
+          </span>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { Disc3, History, Trophy, Users, Brackets, Award } from "lucide-react";
+import { Disc3, History, Trophy, Users, Brackets, Award, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -130,7 +130,7 @@ const TournamentMenu = () => {
                 variant="outline"
                 className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
               >
-                <Users size={48} className="text-blue-500" />
+                <Users size={48} className="text-black-500" />
                 <span>Marshall Assignments</span>
               </Button>
             )}
@@ -142,7 +142,7 @@ const TournamentMenu = () => {
                 variant="outline"
                 className="h-40 flex flex-col items-center justify-center gap-4 text-xl border-2 hover:bg-accent transition-all"
               >
-                <Users size={48} />
+                <Calendar size={48} />
                 <span>My Assignments</span>
               </Button>
             )}

@@ -1,96 +1,58 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Save, Flag, Share2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import ScoreTracker from "./ScoreTracker";
 import GameTimer from "./GameTimer";
 import PlayerStats from "./PlayerStats";
+import { useParams } from "react-router-dom";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-const GameScreen = ({
-  teamAName = "Team A",
-  teamBName = "Team B",
-  teamAPlayers = [
-    { id: "1", name: "Alex Smith", goals: 0, assists: 0, blocks: 0 },
-    { id: "2", name: "Jamie Johnson", goals: 0, assists: 0, blocks: 0 },
-    { id: "3", name: "Taylor Brown", goals: 0, assists: 0, blocks: 0 },
-  ],
-  teamBPlayers = [
-    { id: "4", name: "Jordan Lee", goals: 0, assists: 0, blocks: 0 },
-    { id: "5", name: "Casey Wilson", goals: 0, assists: 0, blocks: 0 },
-    { id: "6", name: "Riley Garcia", goals: 0, assists: 0, blocks: 0 },
-  ],
-  initialGameTime = 2700, // 45 minutes in seconds
-  initialTimeoutTime = 70,
-  initialHalftimeTime = 600, // 10 minutes in seconds
-  onEndGame = () => {},
-}) => {
+const GameScreen = () => {
+  const { tournamentId, matchId } = useParams();
+  const [match, setMatch] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
-  const [playersA, setPlayersA] = useState(teamAPlayers);
-  const [playersB, setPlayersB] = useState(teamBPlayers);
   const [gameInProgress, setGameInProgress] = useState(true);
   const [gameStartTime, setGameStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [gameTime, setGameTime] = useState(2700); // default
+
+  useEffect(() => {
+    const fetchMatch = async () => {
+      setLoading(true);
+      try {
+        const matchRef = doc(db, "matches", matchId);
+        const matchSnap = await getDoc(matchRef);
+        if (matchSnap.exists()) {
+          const matchData = matchSnap.data();
+          setMatch(matchData);
+          setGameTime(matchData.gameParameters?.gameDuration * 60 || 2700);
+        }
+      } catch (error) {
+        console.error("Error fetching match:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMatch();
+  }, [matchId]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!match) {
+    return <div>Match not found</div>;
+  }
 
   const handleScoreChange = (team, newScore) => {
     if (team === "A") {
       setScoreA(newScore);
     } else {
       setScoreB(newScore);
-    }
-  };
-
-  const handleAddPlayer = (teamId, playerName) => {
-    const newPlayer = {
-      id: Date.now().toString(),
-      name: playerName,
-      goals: 0,
-      assists: 0,
-      blocks: 0,
-    };
-
-    if (teamId === "A") {
-      setPlayersA([...playersA, newPlayer]);
-    } else {
-      setPlayersB([...playersB, newPlayer]);
-    }
-  };
-
-  const handleRecordStat = (teamId, playerId, statType) => {
-    const statKey = statType === "block" ? "blocks" : statType + "s";
-
-    if (teamId === "A") {
-      const updatedPlayers = playersA.map((player) => {
-        if (player.id === playerId) {
-          return {
-            ...player,
-            [statKey]: (player[statKey] || 0) + 1,
-          };
-        }
-        return player;
-      });
-      setPlayersA(updatedPlayers);
-
-      // Auto-increment score for goals
-      if (statType === "goal") {
-        setScoreA(scoreA + 1);
-      }
-    } else {
-      const updatedPlayers = playersB.map((player) => {
-        if (player.id === playerId) {
-          return {
-            ...player,
-            [statKey]: (player[statKey] || 0) + 1,
-          };
-        }
-        return player;
-      });
-      setPlayersB(updatedPlayers);
-
-      // Auto-increment score for goals
-      if (statType === "goal") {
-        setScoreB(scoreB + 1);
-      }
     }
   };
 
@@ -109,25 +71,23 @@ const GameScreen = ({
 
   const handleTimerPause = (currentElapsedTime) => {
     setElapsedTime(currentElapsedTime);
-  setGameTime(initialGameTime - currentElapsedTime); // Update game time on pause
+    setGameTime(match.gameParameters?.gameDuration * 60 - currentElapsedTime); // Update game time on pause
   };
 
   const handleEndGame = () => {
     setGameInProgress(false);
     const gameData = {
-      teamAName,
-      teamBName,
+      teamAName: match.teamAName,
+      teamBName: match.teamBName,
       teamAScore: scoreA,
       teamBScore: scoreB,
-      teamAPlayers: playersA,
-      teamBPlayers: playersB,
-      gameDuration: elapsedTime > 0 ? elapsedTime : initialGameTime - gameTime,
+      teamAPlayers: match.teamAPlayers || [],
+      teamBPlayers: match.teamBPlayers || [],
+      gameDuration: elapsedTime > 0 ? elapsedTime : match.gameParameters?.gameDuration * 60 - gameTime,
       gameDate: new Date(),
     };
-    onEndGame(gameData);
+    // Implement the logic to save the game data to Firestore
   };
-
-  const [gameTime, setGameTime] = useState(initialGameTime);
 
   return (
     <div className="w-full min-h-screen bg-gray-50 p-4 md:p-6">
@@ -143,7 +103,7 @@ const GameScreen = ({
               Back
             </Button>
             <h1 className="text-2xl font-bold">
-              {teamAName} vs {teamBName}
+              {match.teamAName} vs {match.teamBName}
             </h1>
           </div>
           <div className="flex space-x-2">
@@ -164,8 +124,8 @@ const GameScreen = ({
 
         {/* Score Tracker */}
         <ScoreTracker
-          teamAName={teamAName}
-          teamBName={teamBName}
+          teamAName={match.teamAName}
+          teamBName={match.teamBName}
           teamAScore={scoreA}
           teamBScore={scoreB}
           onScoreChange={handleScoreChange}
@@ -175,9 +135,9 @@ const GameScreen = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1">
             <GameTimer
-              initialGameTime={initialGameTime}
-              initialTimeoutTime={initialTimeoutTime}
-              initialHalftimeTime={initialHalftimeTime}
+              initialGameTime={match.gameParameters?.gameDuration * 60 || 2700}
+              initialTimeoutTime={match.gameParameters?.timeoutDuration || 70}
+              initialHalftimeTime={match.gameParameters?.halftimeDuration * 60 || 600}
               onTimeComplete={handleTimeComplete}
               onTimerStart={handleTimerStart}
               onTimerPause={handleTimerPause}
@@ -198,24 +158,22 @@ const GameScreen = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Current Score</p>
-                    <p className="text-lg font-medium">
-                      {scoreA} - {scoreB}
-                    </p>
+                    <p className="text-2xl font-bold">{scoreA} - {scoreB}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Leading Team</p>
                     <p className="text-lg font-medium">
                       {scoreA > scoreB
-                        ? teamAName
+                        ? match.teamAName
                         : scoreB > scoreA
-                          ? teamBName
+                          ? match.teamBName
                           : "Tied"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Total Players</p>
                     <p className="text-lg font-medium">
-                      {playersA.length + playersB.length}
+                      {match.teamAPlayers?.length + match.teamBPlayers?.length}
                     </p>
                   </div>
                   <div>
@@ -230,12 +188,13 @@ const GameScreen = ({
 
         {/* Player Stats */}
         <PlayerStats
-          teamAPlayers={playersA}
-          teamBPlayers={playersB}
-          teamAName={teamAName}
-          teamBName={teamBName}
-          onAddPlayer={handleAddPlayer}
-          onRecordStat={handleRecordStat}
+          teamAPlayers={match.teamAPlayers || []}
+          teamBPlayers={match.teamBPlayers || []}
+          teamAName={match.teamAName}
+          teamBName={match.teamBName}
+          onRecordStat={(teamId, playerId, statType) => {
+            // Implement the logic to record a stat for a player
+          }}
         />
       </div>
     </div>

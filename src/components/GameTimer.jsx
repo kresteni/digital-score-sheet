@@ -11,12 +11,13 @@ const GameTimer = ({
   onTimeComplete = () => {},
   onTimerStart = () => {},
   onTimerPause = () => {},
+  onTimerUpdate = () => {},
 }) => {
   const [gameTime, setGameTime] = useState(initialGameTime);
   const [timeoutTime, setTimeoutTime] = useState(initialTimeoutTime);
   const [halftimeTime, setHalftimeTime] = useState(initialHalftimeTime);
 
-  const [activeTimer, setActiveTimer] = useState(null); // 'game', 'timeout', 'halftime'
+  const [activeTimer, setActiveTimer] = useState("game");
   const [isRunning, setIsRunning] = useState(false);
 
   const timerRef = useRef(null);
@@ -32,6 +33,7 @@ const GameTimer = ({
               onTimeComplete("game");
               return 0;
             }
+            onTimerUpdate("game", prev - 1);
             return prev - 1;
           });
         } else if (activeTimer === "timeout") {
@@ -42,6 +44,7 @@ const GameTimer = ({
               onTimeComplete("timeout");
               return 0;
             }
+            onTimerUpdate("timeout", prev - 1);
             return prev - 1;
           });
         } else if (activeTimer === "halftime") {
@@ -52,6 +55,7 @@ const GameTimer = ({
               onTimeComplete("halftime");
               return 0;
             }
+            onTimerUpdate("halftime", prev - 1);
             return prev - 1;
           });
         }
@@ -61,7 +65,7 @@ const GameTimer = ({
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isRunning, activeTimer, onTimeComplete]);
+  }, [isRunning, activeTimer, onTimeComplete, onTimerUpdate]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);

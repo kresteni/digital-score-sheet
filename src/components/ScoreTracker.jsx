@@ -8,21 +8,15 @@ const ScoreTracker = ({
   teamBName = "Team B",
   teamAScore = 0,
   teamBScore = 0,
-  onScoreChange = () => {},
+  onScoreChange,
+  onScoreUpdate,
 }) => {
   const [scoreA, setScoreA] = useState(teamAScore);
   const [scoreB, setScoreB] = useState(teamBScore);
 
-  const handleScoreChange = (team, increment) => {
-    if (team === "A") {
-      const newScore = increment ? scoreA + 1 : Math.max(0, scoreA - 1);
-      setScoreA(newScore);
-      onScoreChange("A", newScore);
-    } else {
-      const newScore = increment ? scoreB + 1 : Math.max(0, scoreB - 1);
-      setScoreB(newScore);
-      onScoreChange("B", newScore);
-    }
+  const handleScoreChange = (team, newScore) => {
+    onScoreChange(team, newScore);
+    onScoreUpdate(team, newScore);
   };
 
   return (
@@ -45,7 +39,7 @@ const ScoreTracker = ({
                   variant="outline"
                   size="lg"
                   className="rounded-full h-14 w-14 p-0"
-                  onClick={() => handleScoreChange("A", false)}
+                  onClick={() => handleScoreChange("A", scoreA - 1)}
                 >
                   <Minus className="h-6 w-6" />
                 </Button>
@@ -53,7 +47,7 @@ const ScoreTracker = ({
                   variant="default"
                   size="lg"
                   className="rounded-full h-14 w-14 p-0 bg-primary"
-                  onClick={() => handleScoreChange("A", true)}
+                  onClick={() => handleScoreChange("A", scoreA + 1)}
                 >
                   <Plus className="h-6 w-6" />
                 </Button>
@@ -84,7 +78,7 @@ const ScoreTracker = ({
                   variant="outline"
                   size="lg"
                   className="rounded-full h-14 w-14 p-0"
-                  onClick={() => handleScoreChange("B", false)}
+                  onClick={() => handleScoreChange("B", scoreB - 1)}
                 >
                   <Minus className="h-6 w-6" />
                 </Button>
@@ -92,7 +86,7 @@ const ScoreTracker = ({
                   variant="default"
                   size="lg"
                   className="rounded-full h-14 w-14 p-0 bg-secondary"
-                  onClick={() => handleScoreChange("B", true)}
+                  onClick={() => handleScoreChange("B", scoreB + 1)}
                 >
                   <Plus className="h-6 w-6" />
                 </Button>

@@ -170,6 +170,14 @@ const AppContent = () => {
 
         {/* Game Routes - Accessible by both roles */}
         <Route
+          path="/tournament/:tournamentId/game/play/:matchId"
+          element={
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
+              <GameScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/tournament/:tournamentId/game/play"
           element={
             <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
@@ -218,6 +226,16 @@ const AppContent = () => {
           element={
             <ProtectedRoute allowedRoles={["marshall"]}>
               <MyAssignments />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Game Setup Route */}
+        <Route
+          path="/tournament/:tournamentId/game/setup/:matchId"
+          element={
+            <ProtectedRoute allowedRoles={["head-marshall", "marshall"]}>
+              <GameSetup />
             </ProtectedRoute>
           }
         />

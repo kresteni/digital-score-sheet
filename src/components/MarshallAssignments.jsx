@@ -42,10 +42,12 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
+import { useParams } from "react-router-dom";
 
 const MarshallAssignments = ({
-  onBack = () => {"TournamentMenu"},
+  onBack = () => {},
 }) => {
+  const { tournamentId } = useParams();
   const { currentUser } = useAuth();
   const userRole = currentUser?.role;
   const [marshalls, setMarshalls] = useState([]);
@@ -82,51 +84,95 @@ const MarshallAssignments = ({
   // Fetch assignments from Firestore
   useEffect(() => {
     const fetchAssignments = async () => {
-      const assignmentsRef = collection(db, "assignments");
-      let q;
-      if (userRole === "marshall") {
-        // Only fetch assignments for this marshall
-        q = query(assignmentsRef, where("marshallId", "==", currentUser.uid));
-      } else {
-        // Head-marshall: fetch all assignments
-        q = assignmentsRef;
+      try {
+        console.log("Fetching assignments for tournament:", tournamentId);
+        const assignmentsRef = collection(db, "assignments");
+        let q;
+        if (userRole === "marshall") {
+          // Only fetch assignments for this marshall
+          q = query(
+            assignmentsRef,
+            where("marshallId", "==", currentUser.uid),
+            where("tournamentId", "==", tournamentId)
+          );
+        } else {
+          // Head-marshall: fetch all assignments for this tournament
+          q = query(
+            assignmentsRef,
+            where("tournamentId", "==", tournamentId)
+          );
+        }
+        const snapshot = await getDocs(q);
+        const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("Fetched assignments:", assignmentsData);
+        setAssignments(assignmentsData);
+      } catch (error) {
+        console.error("Error fetching assignments:", error);
       }
-      const snapshot = await getDocs(q);
-      const assignmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAssignments(assignmentsData);
     };
-    if (currentUser) fetchAssignments();
-  }, [userRole, currentUser]);
+    if (currentUser && tournamentId) fetchAssignments();
+  }, [userRole, currentUser, tournamentId]);
 
   // Fetch matches for the current tournament
   useEffect(() => {
-    // Assume tournamentId is available as a prop or from context
-    const tournamentId = currentUser?.tournamentId || null;
-    if (!tournamentId) return;
     const fetchMatches = async () => {
-      const matchesRef = collection(db, 'matches');
-      const q = query(matchesRef, where('tournamentId', '==', tournamentId));
-      const snapshot = await getDocs(q);
-      const matchesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMatches(matchesData);
+      try {
+        console.log("Fetching matches for tournament:", tournamentId);
+        const matchesRef = collection(db, 'matches');
+        let q;
+        
+        if (userRole === "marshall") {
+          // For marshalls: fetch only their assigned matches
+          q = query(
+            matchesRef,
+            where('tournamentId', '==', tournamentId),
+            where('marshallId', '==', currentUser.uid),
+            where('status', 'in', ['Scheduled', 'In Progress'])
+          );
+        } else {
+          // For head-marshall: fetch all matches that have marshalls assigned
+          q = query(
+            matchesRef,
+            where('tournamentId', '==', tournamentId),
+            where('marshallId', '!=', ''),
+            where('status', 'in', ['Scheduled', 'In Progress'])
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        const matchesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          time: doc.data().time ? new Date(doc.data().time).toISOString() : null
+        }));
+        console.log("Fetched matches:", matchesData);
+        setMatches(matchesData);
+      } catch (error) {
+        console.error("Error fetching matches:", error);
+      }
     };
-    fetchMatches();
-  }, [currentUser]);
+    if (tournamentId) fetchMatches();
+  }, [tournamentId, userRole, currentUser]);
 
   // When a match is selected, auto-fill assignment fields
   useEffect(() => {
     if (!selectedMatchId) return;
     const match = matches.find(m => m.id === selectedMatchId);
     if (match) {
+      const matchTime = match.time ? new Date(match.time) : new Date();
       setNewAssignment({
         teams: `${match.teamA?.name || 'TBD'} vs ${match.teamB?.name || 'TBD'}`,
-        date: match.time ? match.time.split('T')[0] : '',
-        time: match.time ? match.time.split('T')[1]?.slice(0,5) : '',
+        date: matchTime.toISOString().split('T')[0],
+        time: matchTime.toISOString().split('T')[1].slice(0, 5),
         pitch: match.pitch || '',
         matchId: match.id,
+        tournamentId: tournamentId,
+        status: match.status || 'Scheduled',
+        marshallId: match.marshallId || '',
+        marshallName: match.marshallName || ''
       });
     }
-  }, [selectedMatchId]);
+  }, [selectedMatchId, matches, tournamentId]);
 
   // Count assignments for each marshall
   const marshallAssignmentCounts = marshalls.reduce((acc, marshall) => {
@@ -192,6 +238,7 @@ const MarshallAssignments = ({
   if (userRole === "marshall") {
     // Only show assignments assigned to this marshall
     const marshallAssignments = assignments.filter(a => a.marshallId === currentUser.uid);
+    console.log("Marshall assignments:", marshallAssignments);
     return (
       <div className="w-full max-w-4xl mx-auto p-4 bg-background">
         <Card className="border-2 border-primary/10 shadow-lg">
@@ -209,7 +256,7 @@ const MarshallAssignments = ({
           <CardContent className="p-4">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-center mb-2">
-                Assignments
+                My Match Assignments
               </h2>
               <h3 className="text-lg font-semibold text-center mb-4">
                 {currentUser.displayName || currentUser.name || currentUser.email}

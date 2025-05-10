@@ -22,7 +22,8 @@ const MyAssignments = () => {
       const assignmentsRef = collection(db, "assignments");
       const assignmentsQuery = query(
         assignmentsRef,
-        where("marshallId", "==", currentUser.uid)
+        where("marshallId", "==", currentUser.uid),
+        where("tournamentId", "==", tournamentId)
       );
       const assignmentsSnapshot = await getDocs(assignmentsQuery);
       const assignmentsData = assignmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

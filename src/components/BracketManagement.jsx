@@ -104,6 +104,7 @@ const BracketManagement = ({
         const matchesQuery = query(matchesCollection, where("tournamentId", "==", tournamentId));
         const matchesSnapshot = await getDocs(matchesQuery);
         
+        let matchesData = [];
         if (matchesSnapshot.empty) {
           // If no matches exist, initialize with round robin
           const poolATeams = teamsData.filter((team) => team.pool === "A");
@@ -119,11 +120,11 @@ const BracketManagement = ({
               addDoc(collection(db, "matches"), { ...match, tournamentId })
             ));
             
-            setMatches(initialMatches);
+            matchesData = initialMatches;
           }
         } else {
           // Format matches with team objects
-          const matchesData = await Promise.all(
+          matchesData = await Promise.all(
             matchesSnapshot.docs.map(async (matchDoc) => {
               const matchData = matchDoc.data();
               
@@ -139,14 +140,41 @@ const BracketManagement = ({
               };
             })
           );
-          
-          setMatches(matchesData);
-          
-          // Set initial round if matches exist
-          if (matchesData.length > 0) {
-            const rounds = Array.from(new Set(matchesData.map(match => match.round)));
-            setCurrentRound(rounds[0] || "Round Robin");
+        }
+        setMatches(matchesData);
+
+        // --- SYNC ASSIGNMENTS ---
+        // For each match with a marshallId, ensure an assignment exists
+        const assignmentsRef = collection(db, "assignments");
+        for (const match of matchesData) {
+          if (match.marshallId) {
+            const q = query(assignmentsRef, where("matchId", "==", match.id));
+            const existingAssignments = await getDocs(q);
+            const assignmentData = {
+              marshallId: match.marshallId,
+              marshallName: match.marshallName,
+              matchId: match.id,
+              teams: `${match.teamA?.name || 'TBD'} vs ${match.teamB?.name || 'TBD'}`,
+              date: match.time ? match.time.split('T')[0] : '',
+              time: match.time ? match.time.split('T')[1]?.slice(0,5) : '',
+              pitch: match.pitch || '',
+              tournamentId: tournamentId,
+              status: match.status || 'Scheduled'
+            };
+            if (existingAssignments.empty) {
+              await addDoc(assignmentsRef, assignmentData);
+            } else {
+              const assignmentDoc = existingAssignments.docs[0];
+              await updateDoc(doc(db, "assignments", assignmentDoc.id), assignmentData);
+            }
           }
+        }
+        // --- END SYNC ASSIGNMENTS ---
+
+        // Set initial round if matches exist
+        if (matchesData.length > 0) {
+          const rounds = Array.from(new Set(matchesData.map(match => match.round)));
+          setCurrentRound(rounds[0] || "Round Robin");
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -192,10 +220,47 @@ const BracketManagement = ({
         teamAId: editingMatch.teamA?.id || editingMatch.teamAId || null,
         teamBId: editingMatch.teamB?.id || editingMatch.teamBId || null,
         endTime: editingMatch.endTime || new Date(new Date(editingMatch.time).getTime() + 60 * 60 * 1000).toISOString(),
-        // Keep teamA and teamB objects for local state
+        tournamentId: tournamentId
       };
       
       await updateDoc(matchRef, matchData);
+
+      // If a marshall is assigned, create or update the assignment
+      if (editingMatch.marshallId) {
+        const assignmentsRef = collection(db, "assignments");
+        const q = query(assignmentsRef, where("matchId", "==", editingMatch.id));
+        const existingAssignments = await getDocs(q);
+        
+        const assignmentData = {
+          marshallId: editingMatch.marshallId,
+          marshallName: editingMatch.marshallName,
+          matchId: editingMatch.id,
+          teams: `${editingMatch.teamA?.name || 'TBD'} vs ${editingMatch.teamB?.name || 'TBD'}`,
+          date: editingMatch.time ? editingMatch.time.split('T')[0] : '',
+          time: editingMatch.time ? editingMatch.time.split('T')[1]?.slice(0,5) : '',
+          pitch: editingMatch.pitch || '',
+          tournamentId: tournamentId,
+          status: editingMatch.status || 'Scheduled'
+        };
+
+        if (existingAssignments.empty) {
+          // Create new assignment
+          await addDoc(assignmentsRef, assignmentData);
+        } else {
+          // Update existing assignment
+          const assignmentDoc = existingAssignments.docs[0];
+          await updateDoc(doc(db, "assignments", assignmentDoc.id), assignmentData);
+        }
+      } else {
+        // If no marshall is assigned, remove any existing assignment
+        const assignmentsRef = collection(db, "assignments");
+        const q = query(assignmentsRef, where("matchId", "==", editingMatch.id));
+        const existingAssignments = await getDocs(q);
+        if (!existingAssignments.empty) {
+          const assignmentDoc = existingAssignments.docs[0];
+          await deleteDoc(doc(db, "assignments", assignmentDoc.id));
+        }
+      }
       
       // Update local state
       setMatches(
@@ -622,7 +687,7 @@ const BracketManagement = ({
                       <SelectValue placeholder="Select Team A" />
                     </SelectTrigger>
                     {loading ? (
-                      <SelectContent>
+                    <SelectContent>
                         <SelectItem value="" disabled>Loading teams...</SelectItem>
                       </SelectContent>
                     ) : (
@@ -630,11 +695,11 @@ const BracketManagement = ({
                         {teams
                           .filter(team => team.tournamentId === tournamentId)
                           .map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                     )}
                   </Select>
                 </div>
@@ -654,7 +719,7 @@ const BracketManagement = ({
                       <SelectValue placeholder="Select Team B" />
                     </SelectTrigger>
                     {loading ? (
-                      <SelectContent>
+                    <SelectContent>
                         <SelectItem value="" disabled>Loading teams...</SelectItem>
                       </SelectContent>
                     ) : (
@@ -662,11 +727,11 @@ const BracketManagement = ({
                         {teams
                           .filter(team => team.tournamentId === tournamentId)
                           .map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                     )}
                   </Select>
                 </div>
